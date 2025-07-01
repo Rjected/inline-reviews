@@ -80,8 +80,8 @@ local function comment_previewer(opts)
       
       -- Get the comment line and context
       local comment_line = entry.lnum or 1
-      local context_before = 5
-      local context_after = 5
+      local context_before = 15  -- Show more context
+      local context_after = 15   -- Show more context
       local start_line = math.max(1, comment_line - context_before)
       local end_line = math.min(#file_lines, comment_line + context_after)
       
@@ -210,7 +210,7 @@ local function comment_previewer(opts)
       vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, preview_lines)
       vim.api.nvim_buf_set_option(self.state.bufnr, "modifiable", false)
       
-      -- Apply highlights
+      -- Apply highlights first
       for _, hl in ipairs(highlights) do
         vim.api.nvim_buf_add_highlight(
           self.state.bufnr,
@@ -222,8 +222,65 @@ local function comment_previewer(opts)
         )
       end
       
-      -- Set filetype for better display
-      vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", "markdown")
+      -- Apply syntax highlighting using treesitter or builtin
+      vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(self.state.bufnr) then
+          -- Determine filetype from filename
+          local ft = vim.filetype.match({ filename = filename })
+          if not ft then
+            -- Try by extension
+            local ext = vim.fn.fnamemodify(filename, ":e")
+            local ext_to_ft = {
+              rs = "rust",
+              py = "python",
+              js = "javascript",
+              ts = "typescript",
+              lua = "lua",
+              go = "go",
+              c = "c",
+              cpp = "cpp",
+              h = "c",
+              hpp = "cpp",
+              java = "java",
+              rb = "ruby",
+              sh = "sh",
+              bash = "bash",
+              zsh = "zsh",
+              yml = "yaml",
+              yaml = "yaml",
+              json = "json",
+              md = "markdown",
+              vim = "vim",
+              toml = "toml",
+              xml = "xml",
+              html = "html",
+              css = "css",
+            }
+            ft = ext_to_ft[ext] or ext
+          end
+          
+          if ft and ft ~= "" then
+            -- Set filetype to trigger syntax highlighting
+            vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", ft)
+            
+            -- Reapply our custom highlights after syntax loads
+            vim.defer_fn(function()
+              if vim.api.nvim_buf_is_valid(self.state.bufnr) then
+                for _, hl in ipairs(highlights) do
+                  vim.api.nvim_buf_add_highlight(
+                    self.state.bufnr,
+                    -1,
+                    hl.hl_group,
+                    hl.line,
+                    hl.col,
+                    hl.end_col
+                  )
+                end
+              end
+            end, 10)
+          end
+        end
+      end)
       
       -- Scroll to top to show code context first
       vim.schedule(function()
