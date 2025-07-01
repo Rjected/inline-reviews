@@ -65,12 +65,12 @@ function M.parse_review_comments(response)
     for _, comment in ipairs(thread.comments.nodes or {}) do
       table.insert(thread_comments, {
         id = comment.id,
-        body = comment.body,
+        body = comment.body and comment.body:gsub("\r", "") or "",
         author = comment.author.login,
         author_avatar = comment.author.avatarUrl,
         created_at = comment.createdAt,
         edited_at = comment.lastEditedAt,
-        diff_hunk = comment.diffHunk,
+        diff_hunk = comment.diffHunk and comment.diffHunk:gsub("\r", "") or "",
         position = comment.position,
         original_position = comment.originalPosition,
         reactions = comment.reactionGroups,

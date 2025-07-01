@@ -64,8 +64,9 @@ local function create_comment_lines(thread, max_width)
     -- Comment body
     table.insert(lines, "")
     
-    -- Wrap and indent comment body
-    local wrapped_body = wrap_text(comment.body, max_width - 2)  -- -2 for indent
+    -- Wrap and indent comment body (clean any remaining CR characters)
+    local clean_body = comment.body:gsub("\r", "")
+    local wrapped_body = wrap_text(clean_body, max_width - 2)  -- -2 for indent
     for _, body_line in ipairs(wrapped_body) do
       table.insert(lines, "  " .. body_line)
     end
@@ -110,11 +111,13 @@ local function create_comment_lines(thread, max_width)
       table.insert(lines, "")
       
       for hunk_line in thread.comments[1].diff_hunk:gmatch("[^\n]+") do
-        table.insert(lines, hunk_line)
+        -- Clean CR characters from diff lines
+        local clean_line = hunk_line:gsub("\r", "")
+        table.insert(lines, clean_line)
         
         -- Highlight diff lines based on the first character
         local hl_group = nil
-        local first_char = hunk_line:sub(1, 1)
+        local first_char = clean_line:sub(1, 1)
         
         if first_char == "+" then
           hl_group = "DiffAdd"

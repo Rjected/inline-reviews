@@ -157,9 +157,10 @@ local function comment_previewer(opts)
         })
         table.insert(preview_lines, "")
         
-        -- Comment body (wrapped)
+        -- Comment body (wrapped and cleaned)
         local max_width = vim.api.nvim_win_get_width(self.state.winid) - 4
-        for body_line in comment.body:gmatch("[^\n]+") do
+        local clean_body = comment.body:gsub("\r", "")
+        for body_line in clean_body:gmatch("[^\n]+") do
           -- Simple word wrap
           if #body_line <= max_width then
             table.insert(preview_lines, "  " .. body_line)
