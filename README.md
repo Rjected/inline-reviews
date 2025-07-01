@@ -119,7 +119,7 @@ When viewing comments in the hover window, you can:
   - Choose from: 👍 👎 😄 🎉 😕 ❤️ 🚀 👀
   - Use number keys 1-8 for quick selection
 - **Resolve/Unresolve threads**: Press `s` on the thread header
-  - Only available for non-outdated threads
+  - Works for both current and outdated threads
   - Requires appropriate permissions
 
 ### Telescope Integration

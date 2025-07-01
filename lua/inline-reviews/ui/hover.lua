@@ -44,14 +44,14 @@ local function create_comment_lines(thread, max_width)
   local resolve_action = ""
   
   local opts = config.get()
-  if opts.interactions.enabled and opts.interactions.show_action_hints and not thread.is_outdated then
+  if opts.interactions.enabled and opts.interactions.show_action_hints then
     resolve_action = thread.is_resolved 
       and string.format(" [%s: unresolve]", opts.interactions.resolve_key)
       or string.format(" [%s: resolve]", opts.interactions.resolve_key)
   end
   
-  -- Only show resolve action if not outdated
-  if not thread.is_outdated and opts.interactions.enabled then
+  -- Show resolve action for all threads (including outdated)
+  if opts.interactions.enabled then
     table.insert(lines, string.format("──────── Thread%s%s%s ────────", status, outdated, resolve_action))
     metadata[#lines] = { 
       type = "thread_header", 
