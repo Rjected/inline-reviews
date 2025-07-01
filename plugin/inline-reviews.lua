@@ -76,3 +76,7 @@ vim.api.nvim_create_user_command("InlineCommentsRefreshDiff", function()
     comments.refresh_file_mappings(file_path)
   end
 end, { desc = "Refresh diff mappings for current file" })
+
+vim.api.nvim_create_user_command("InlineCommentsRefresh", function()
+  require("inline-reviews").reload()
+end, { desc = "Manually refresh PR comments from GitHub" })

@@ -48,6 +48,10 @@ local defaults = {
     show_original_line = true,     -- Show original line number in hover
     cache_ttl = 300,              -- Cache TTL for diff mappings in seconds
   },
+  auto_refresh = {
+    enabled = false,               -- Auto-refresh comments periodically
+    interval = 300,                -- Refresh interval in seconds (5 minutes)
+  },
 }
 
 M.options = {}

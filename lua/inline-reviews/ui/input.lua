@@ -50,7 +50,10 @@ function M.show(opts)
     end
   end
   
-  -- Create window
+  -- Create window with simplified title
+  local title = opts.title or " Reply "
+  title = title .. "(C-s to submit) "
+  
   input_win = vim.api.nvim_open_win(input_buf, true, {
     relative = "editor",
     row = row,
@@ -59,7 +62,7 @@ function M.show(opts)
     height = height,
     style = "minimal",
     border = opts.border or "rounded",
-    title = opts.title or " Reply ",
+    title = title,
     title_pos = "center",
   })
   
@@ -75,18 +78,32 @@ function M.show(opts)
   -- Set up keymaps
   local keymap_opts = { noremap = true, silent = true, buffer = input_buf }
   
-  -- Submit with Ctrl-Enter (in both modes)
+  -- Submit with Ctrl-s (lowercase)
+  vim.keymap.set("n", "<C-s>", function()
+    M.submit()
+  end, keymap_opts)
+  
+  vim.keymap.set("i", "<C-s>", function()
+    vim.cmd("stopinsert")
+    M.submit()
+  end, keymap_opts)
+  
+  -- Also try with different notation
+  vim.keymap.set({"n", "i"}, "<c-s>", function()
+    if vim.fn.mode() == "i" then
+      vim.cmd("stopinsert")
+    end
+    M.submit()
+  end, keymap_opts)
+  
+  -- Also support Ctrl-Enter
   vim.keymap.set("n", "<C-CR>", function()
     M.submit()
   end, keymap_opts)
   
   vim.keymap.set("i", "<C-CR>", function()
+    vim.cmd("stopinsert")
     M.submit()
-  end, keymap_opts)
-  
-  -- Allow normal Enter for new lines in insert mode
-  vim.keymap.set("i", "<CR>", function()
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, true, true), "n", false)
   end, keymap_opts)
   
   -- Cancel with Escape
@@ -102,46 +119,113 @@ function M.show(opts)
   -- Start in insert mode
   vim.cmd("startinsert")
   
-  -- Auto-close on window leave
+  -- Create buffer-local command for submitting
+  vim.api.nvim_buf_create_user_command(input_buf, "Submit", function()
+    M.submit()
+  end, {})
+  
+  -- Also map :w to submit (common pattern)
+  vim.keymap.set("n", ":w<CR>", function()
+    M.submit()
+  end, { buffer = input_buf, silent = true })
+  
+  -- Auto-close on window leave (but not when submitting)
+  local is_submitting = false
   vim.api.nvim_create_autocmd("WinLeave", {
     buffer = input_buf,
     once = true,
     callback = function()
       vim.schedule(function()
-        M.close()
+        -- Don't close if we're in the middle of submitting
+        if not is_submitting and M.is_open() then
+          M.close()
+        end
       end)
     end,
   })
   
-  -- Show help text
-  if opts.help_text then
-    local help_lines = {
-      "",
-      "── " .. opts.help_text .. " ──",
-    }
-    vim.api.nvim_buf_set_extmark(input_buf, vim.api.nvim_create_namespace("inline_reviews_input"), 0, 0, {
-      virt_lines = { help_lines },
-      virt_lines_above = false,
-      hl_group = "Comment",
-    })
+  -- Track when we're submitting
+  vim.b[input_buf]._is_submitting = function()
+    is_submitting = true
   end
+  
+  -- Don't show help text as virtual lines since it interferes with editing
 end
 
 function M.submit()
   if not input_buf or not vim.api.nvim_buf_is_valid(input_buf) then
+    if vim.g.inline_reviews_debug then
+      vim.notify("Submit: invalid buffer", vim.log.levels.DEBUG)
+    end
     return
+  end
+  
+  -- Mark that we're submitting
+  if vim.b[input_buf]._is_submitting then
+    vim.b[input_buf]._is_submitting()
   end
   
   -- Get the text
   local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
   local text = table.concat(lines, "\n"):gsub("^%s*(.-)%s*$", "%1")
   
-  -- Close the window
-  M.close()
+  if vim.g.inline_reviews_debug then
+    vim.notify("Submit: text = " .. vim.inspect(text), vim.log.levels.DEBUG)
+  end
   
-  -- Call submit callback
-  if on_submit_callback and text ~= "" then
-    on_submit_callback(text)
+  -- Save callback before updating UI
+  local callback = on_submit_callback
+  
+  if text == "" then
+    vim.notify("Cannot submit empty comment", vim.log.levels.WARN)
+    return
+  end
+  
+  -- Update window to show submitting state
+  if input_win and vim.api.nvim_win_is_valid(input_win) then
+    vim.api.nvim_win_set_config(input_win, {
+      title = " Submitting... ",
+      title_pos = "center",
+    })
+    
+    -- Make buffer read-only
+    vim.api.nvim_buf_set_option(input_buf, "modifiable", false)
+    
+    -- Call submit callback
+    if callback then
+      callback(text, function(success, message)
+        -- Handle result
+        if success then
+          if input_win and vim.api.nvim_win_is_valid(input_win) then
+            vim.api.nvim_win_set_config(input_win, {
+              title = " Submitted! ",
+              title_pos = "center",
+            })
+            -- Close after short delay
+            vim.defer_fn(function()
+              M.close()
+            end, 500)
+          end
+        else
+          if input_win and vim.api.nvim_win_is_valid(input_win) then
+            vim.api.nvim_win_set_config(input_win, {
+              title = " Failed: " .. (message or "Unknown error") .. " ",
+              title_pos = "center",
+            })
+            -- Make editable again
+            vim.api.nvim_buf_set_option(input_buf, "modifiable", true)
+          end
+        end
+      end)
+    else
+      -- No callback, just close
+      M.close()
+    end
+  else
+    -- Window invalid, just try callback
+    if callback and text ~= "" then
+      callback(text)
+    end
   end
 end
 

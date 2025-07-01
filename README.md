@@ -73,6 +73,10 @@ require("inline-reviews").setup({
     update_on_save = true,        -- Update positions when files are saved
     show_original_line = true,    -- Show original line in hover
     cache_ttl = 300,              -- Diff cache TTL in seconds
+  },
+  auto_refresh = {
+    enabled = false,              -- Auto-refresh comments periodically
+    interval = 300,               -- Refresh interval in seconds
   }
 })
 ```
@@ -105,7 +109,9 @@ This works with both:
 
 - `:InlineComments <PR_NUMBER>` - Load comments from a specific PR
 - `:InlineCommentsReload` - Reload comments for current PR
+- `:InlineCommentsRefresh` - Manually refresh comments (alias for reload)
 - `:InlineCommentsClear` - Clear all inline comments
+- `:InlineCommentsRefreshDiff` - Refresh diff mappings for current file
 
 ### Default Keybindings
 
@@ -165,6 +171,15 @@ The plugin automatically tracks how line numbers change as you edit files:
 - Updates automatically when you save files
 - Shows original line numbers in hover window for reference
 - Gracefully handles deleted lines by finding the nearest valid position
+
+## Auto-Refresh
+
+The plugin can automatically refresh comments from GitHub:
+
+- **After replies**: Comments reload automatically after you submit a reply
+- **Periodic refresh**: Enable `auto_refresh` to check for new comments every N seconds
+- **Manual refresh**: Use `:InlineCommentsRefresh` to manually update
+- Background refreshes are silent to avoid interrupting your workflow
 
 ## Example Workflow
 

@@ -414,19 +414,27 @@ function M.show(threads)
         local mutations = require("inline-reviews.github.mutations")
         
         input.show({
-          title = " Reply to Comment ",
-          help_text = "Ctrl-Enter to submit, Esc to cancel",
+          title = " Reply ",
           parent_win = hover_win,
-          on_submit = function(text)
-            vim.notify("Sending reply...", vim.log.levels.INFO)
+          on_submit = function(text, result_callback)
             mutations.add_reply(comment_meta.thread_id, text, function(result, err)
               if err then
+                if result_callback then
+                  result_callback(false, err)
+                end
                 vim.notify("Failed to add reply: " .. err, vim.log.levels.ERROR)
               else
-                vim.notify("Reply added successfully!", vim.log.levels.INFO)
-                -- Refresh the display
+                if result_callback then
+                  result_callback(true)
+                end
+                -- Reload all comments from GitHub to get the new reply
                 vim.schedule(function()
-                  M.refresh()
+                  local inline_reviews = require("inline-reviews")
+                  inline_reviews.reload(true) -- Silent reload
+                  -- Then refresh the hover display after a short delay
+                  vim.defer_fn(function()
+                    M.refresh()
+                  end, 1000)
                 end)
               end
             end)

@@ -95,6 +95,24 @@ function M.setup(opts)
       end,
     })
   end
+  
+  -- Auto-refresh comments periodically
+  local auto_refresh_opts = config.get().auto_refresh
+  if auto_refresh_opts and auto_refresh_opts.enabled then
+    local timer = vim.loop.new_timer()
+    M._auto_refresh_timer = timer
+    
+    timer:start(
+      auto_refresh_opts.interval * 1000, -- Initial delay
+      auto_refresh_opts.interval * 1000, -- Repeat interval
+      vim.schedule_wrap(function()
+        if M.has_comments_loaded() then
+          -- Silently reload in background
+          M.reload(true)
+        end
+      end)
+    )
+  end
 end
 
 function M.load_pr(pr_number)
@@ -140,11 +158,34 @@ function M.auto_load()
   end)
 end
 
-function M.reload()
+function M.reload(silent)
   if current_pr then
-    M.load_pr(current_pr.number)
+    if not silent then
+      vim.notify("Reloading PR #" .. current_pr.number .. " comments...", vim.log.levels.INFO)
+    end
+    
+    local pr_number = current_pr.number
+    github.get_review_comments(pr_number, function(review_comments)
+      if not review_comments then
+        if not silent then
+          vim.notify("Failed to reload comments", vim.log.levels.ERROR)
+        end
+        return
+      end
+      
+      comments.load_comments(review_comments)
+      ui.refresh_all_buffers()
+      
+      if not silent then
+        local count = #review_comments
+        vim.notify(string.format("Reloaded %d comment%s from PR #%d", 
+          count, count == 1 and "" or "s", pr_number), vim.log.levels.INFO)
+      end
+    end)
   else
-    vim.notify("No PR loaded. Use :InlineComments <PR_NUMBER> first.", vim.log.levels.WARN)
+    if not silent then
+      vim.notify("No PR loaded. Use :InlineComments <PR_NUMBER> first.", vim.log.levels.WARN)
+    end
   end
 end
 
@@ -152,6 +193,14 @@ function M.clear()
   comments.clear()
   ui.clear_all_buffers()
   current_pr = nil
+  
+  -- Stop auto-refresh timer if running
+  if M._auto_refresh_timer then
+    M._auto_refresh_timer:stop()
+    M._auto_refresh_timer:close()
+    M._auto_refresh_timer = nil
+  end
+  
   vim.notify("Cleared all inline comments", vim.log.levels.INFO)
 end
 
