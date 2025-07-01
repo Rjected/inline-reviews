@@ -42,6 +42,12 @@ local defaults = {
     pending = "●",
     outdated = "○",
   },
+  diff_tracking = {
+    enabled = true,                -- Enable line number tracking through diffs
+    update_on_save = true,         -- Auto-update mappings when files are saved
+    show_original_line = true,     -- Show original line number in hover
+    cache_ttl = 300,              -- Cache TTL for diff mappings in seconds
+  },
 }
 
 M.options = {}

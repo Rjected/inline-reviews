@@ -41,9 +41,16 @@ local function create_comment_lines(thread, max_width)
   -- Thread header with resolve action
   local status = thread.is_resolved and " [RESOLVED]" or ""
   local outdated = thread.is_outdated and " [OUTDATED]" or ""
+  local displaced = ""
   local resolve_action = ""
   
   local opts = config.get()
+  
+  -- Show if comment is displaced from original line
+  if thread.is_displaced and thread.pr_line and opts.diff_tracking and opts.diff_tracking.show_original_line then
+    displaced = string.format(" [originally line %d]", thread.pr_line)
+  end
+  
   if opts.interactions.enabled and opts.interactions.show_action_hints then
     resolve_action = thread.is_resolved 
       and string.format(" [%s: unresolve]", opts.interactions.resolve_key)
@@ -52,16 +59,16 @@ local function create_comment_lines(thread, max_width)
   
   -- Show resolve action for all threads (including outdated)
   if opts.interactions.enabled then
-    table.insert(lines, string.format("──────── Thread%s%s%s ────────", status, outdated, resolve_action))
+    table.insert(lines, string.format("──────── Thread%s%s%s%s ────────", status, outdated, displaced, resolve_action))
     metadata[#lines] = { 
       type = "thread_header", 
       thread_id = thread.id, 
       is_resolved = thread.is_resolved,
-      action_start = string.len("──────── Thread" .. status .. outdated .. " "),
+      action_start = string.len("──────── Thread" .. status .. outdated .. displaced .. " "),
       action_end = -9  -- Length of " ────────" from end
     }
   else
-    table.insert(lines, string.format("──────── Thread%s%s ────────", status, outdated))
+    table.insert(lines, string.format("──────── Thread%s%s%s ────────", status, outdated, displaced))
   end
   table.insert(highlights, { line = #lines - 1, col = 0, end_col = -1, hl_group = "Comment" })
   

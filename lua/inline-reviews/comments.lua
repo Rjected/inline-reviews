@@ -6,6 +6,8 @@ local config = require("inline-reviews.config")
 local comments_by_file = {}
 local all_comments = {}
 local current_pr_number = nil
+local pr_base_ref = nil
+local line_mappings = {} -- Store mapped lines for each comment
 
 local function normalize_path(path)
   -- Remove leading slash if present
@@ -33,6 +35,11 @@ function M.load_comments(review_threads)
   -- Clear existing comments
   comments_by_file = {}
   all_comments = {}
+  line_mappings = {}
+  
+  local diff = require("inline-reviews.diff")
+  local opts = config.get()
+  local diff_tracking_enabled = opts.diff_tracking and opts.diff_tracking.enabled
   
   for _, thread in ipairs(review_threads) do
     local file_path = normalize_path(thread.path)
@@ -42,25 +49,50 @@ function M.load_comments(review_threads)
     end
     
     -- Handle null/nil line numbers from GraphQL (vim.NIL)
-    local line = thread.line
-    if line == vim.NIL or line == nil then
-      line = thread.original_line
+    local original_line = thread.line
+    if original_line == vim.NIL or original_line == nil then
+      original_line = thread.original_line
     end
-    if line == vim.NIL then
-      line = nil
+    if original_line == vim.NIL then
+      original_line = nil
     end
     
-    if line then
-      if not comments_by_file[file_path][line] then
-        comments_by_file[file_path][line] = {}
+    if original_line then
+      -- Store the original line in the thread for reference
+      thread.pr_line = original_line
+      
+      -- The display line will be calculated asynchronously
+      local display_line = original_line
+      
+      -- Store comment at original line for now
+      if not comments_by_file[file_path][display_line] then
+        comments_by_file[file_path][display_line] = {}
       end
       
-      table.insert(comments_by_file[file_path][line], thread)
-      table.insert(all_comments, {
+      table.insert(comments_by_file[file_path][display_line], thread)
+      local comment_entry = {
         file = file_path,
-        line = line,
+        line = display_line,
+        original_line = original_line,
         thread = thread
-      })
+      }
+      table.insert(all_comments, comment_entry)
+      
+      -- If diff tracking is enabled, calculate mapped line asynchronously
+      if diff_tracking_enabled and pr_base_ref then
+        diff.map_line_to_current(file_path, original_line, pr_base_ref, function(mapped_line)
+          if mapped_line and mapped_line ~= original_line then
+            -- Update the mapping
+            line_mappings[file_path] = line_mappings[file_path] or {}
+            line_mappings[file_path][original_line] = mapped_line
+            
+            -- Schedule UI update
+            vim.schedule(function()
+              M.update_comment_positions()
+            end)
+          end
+        end)
+      end
     end
   end
   
@@ -222,6 +254,104 @@ end
 
 function M.set_comments(review_threads)
   M.load_comments(review_threads)
+end
+
+function M.set_pr_base_ref(base_ref)
+  pr_base_ref = base_ref
+end
+
+function M.get_pr_base_ref()
+  return pr_base_ref
+end
+
+-- Update comment positions based on line mappings
+function M.update_comment_positions()
+  local new_comments_by_file = {}
+  local ui = require("inline-reviews.ui")
+  
+  -- Rebuild comments_by_file with mapped lines
+  for _, comment_data in ipairs(all_comments) do
+    local file_path = comment_data.file
+    local original_line = comment_data.original_line
+    local thread = comment_data.thread
+    
+    if not new_comments_by_file[file_path] then
+      new_comments_by_file[file_path] = {}
+    end
+    
+    -- Determine display line
+    local display_line = original_line
+    if line_mappings[file_path] and line_mappings[file_path][original_line] then
+      display_line = line_mappings[file_path][original_line]
+      thread.is_displaced = true
+    else
+      thread.is_displaced = false
+    end
+    
+    -- Update comment entry
+    comment_data.line = display_line
+    
+    if not new_comments_by_file[file_path][display_line] then
+      new_comments_by_file[file_path][display_line] = {}
+    end
+    
+    table.insert(new_comments_by_file[file_path][display_line], thread)
+  end
+  
+  -- Replace the old structure
+  comments_by_file = new_comments_by_file
+  
+  -- Re-sort all_comments
+  table.sort(all_comments, function(a, b)
+    if a.file == b.file then
+      if type(a.line) == "number" and type(b.line) == "number" then
+        return a.line < b.line
+      end
+      return false
+    end
+    return a.file < b.file
+  end)
+  
+  -- Refresh UI
+  ui.refresh_all()
+end
+
+-- Force refresh line mappings for a file
+function M.refresh_file_mappings(file_path)
+  local diff = require("inline-reviews.diff")
+  local opts = config.get()
+  
+  if not opts.diff_tracking or not opts.diff_tracking.enabled then
+    return
+  end
+  
+  if not pr_base_ref then
+    return
+  end
+  
+  -- Clear cache for this file
+  diff.clear_cache(file_path)
+  
+  -- Recalculate mappings for all comments in this file
+  local file_comments = comments_by_file[file_path]
+  if file_comments then
+    for original_line, threads in pairs(file_comments) do
+      for _, thread in ipairs(threads) do
+        if thread.pr_line then
+          diff.map_line_to_current(file_path, thread.pr_line, pr_base_ref, function(mapped_line)
+            if mapped_line and mapped_line ~= thread.pr_line then
+              line_mappings[file_path] = line_mappings[file_path] or {}
+              line_mappings[file_path][thread.pr_line] = mapped_line
+              
+              vim.schedule(function()
+                M.update_comment_positions()
+              end)
+            end
+          end)
+        end
+      end
+    end
+  end
 end
 
 return M

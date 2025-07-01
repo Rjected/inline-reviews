@@ -67,3 +67,12 @@ vim.api.nvim_create_user_command("InlineCommentsTelescope", function()
 end, {
   desc = "Browse PR comments with Telescope",
 })
+
+vim.api.nvim_create_user_command("InlineCommentsRefreshDiff", function()
+  local comments = require("inline-reviews.comments")
+  local file_path = vim.api.nvim_buf_get_name(0)
+  if file_path ~= "" then
+    vim.notify("Refreshing diff mappings for " .. vim.fn.fnamemodify(file_path, ":~:."), vim.log.levels.INFO)
+    comments.refresh_file_mappings(file_path)
+  end
+end, { desc = "Refresh diff mappings for current file" })

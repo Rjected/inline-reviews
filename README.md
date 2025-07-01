@@ -12,6 +12,7 @@ A Neovim plugin that displays GitHub PR review comments inline without disruptin
 - 🎯 **Focused workflow**: Stay in your editor while reviewing PR feedback
 - ⚡ **Fast and cached**: Uses GitHub CLI with intelligent caching
 - 🔀 **VCS Support**: Works with both Git branches and Jujutsu (jj) bookmarks
+- 📍 **Diff-aware positioning**: Comments follow code changes as you edit
 
 ## Requirements
 
@@ -66,6 +67,12 @@ require("inline-reviews").setup({
   github = {
     gh_cmd = "gh",                -- GitHub CLI command
     cache_ttl = 300,              -- Cache TTL in seconds
+  },
+  diff_tracking = {
+    enabled = true,               -- Track line changes through diffs
+    update_on_save = true,        -- Update positions when files are saved
+    show_original_line = true,    -- Show original line in hover
+    cache_ttl = 300,              -- Diff cache TTL in seconds
   }
 })
 ```
@@ -147,6 +154,17 @@ Actions in Telescope:
 2. **Line Highlighting**: Subtle background highlight on lines with comments
 3. **Virtual Text**: Shows `[<leader>rc: view 2 comments]` when cursor is on a commented line
 4. **Hover Window**: Full comment thread with author, timestamp, and reactions
+5. **Displaced Comments**: Shows `[originally line X]` when a comment has moved due to edits
+
+## Diff-Aware Line Tracking
+
+The plugin automatically tracks how line numbers change as you edit files:
+
+- Comments stay at the correct semantic location as you add/remove lines
+- Works with both Git and Jujutsu (jj) version control systems
+- Updates automatically when you save files
+- Shows original line numbers in hover window for reference
+- Gracefully handles deleted lines by finding the nearest valid position
 
 ## Example Workflow
 

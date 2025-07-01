@@ -76,6 +76,25 @@ function M.setup(opts)
       loaded_buffers[ev.buf] = nil
     end,
   })
+  
+  -- Auto-refresh line mappings on file save
+  local diff_opts = config.get().diff_tracking
+  if diff_opts and diff_opts.enabled and diff_opts.update_on_save then
+    vim.api.nvim_create_autocmd("BufWritePost", {
+      group = augroup,
+      callback = function(ev)
+        if M.has_comments_loaded() then
+          local file_path = vim.api.nvim_buf_get_name(ev.buf)
+          if file_path ~= "" then
+            -- Schedule the refresh to run after the file is saved
+            vim.defer_fn(function()
+              comments.refresh_file_mappings(file_path)
+            end, 100)
+          end
+        end
+      end,
+    })
+  end
 end
 
 function M.load_pr(pr_number)
@@ -91,6 +110,11 @@ function M.load_pr(pr_number)
     end
     
     current_pr = pr_info
+    
+    -- Set the base ref for diff tracking
+    if pr_info.baseRefName then
+      comments.set_pr_base_ref(pr_info.baseRefName)
+    end
     
     github.get_review_comments(pr_number, function(review_comments)
       if not review_comments then
