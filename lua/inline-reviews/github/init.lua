@@ -94,22 +94,43 @@ local function detect_vcs_and_get_branch(callback)
   vim.fn.jobstart({ "jj", "root" }, {
     on_exit = function(_, jj_exit_code, _)
       if jj_exit_code == 0 then
-        -- We're in a jj repo, get the current bookmark
+        -- We're in a jj repo, get bookmarks from current revision or its parents
+        -- First try the working copy
         vim.fn.jobstart({ "jj", "log", "--no-graph", "-r", "@", "-T", "bookmarks" }, {
           stdout_buffered = true,
           on_stdout = function(_, data, _)
             if data and data[1] ~= "" then
               local bookmarks = vim.trim(data[1])
-              -- jj can have multiple bookmarks, take the first one
               local branch = bookmarks:match("([^%s]+)")
               if branch then
                 callback(branch, "jj")
-              else
-                callback(nil)
+                return
               end
-            else
-              callback(nil)
             end
+            
+            -- No bookmark on working copy, try parents
+            vim.fn.jobstart({ "jj", "log", "--no-graph", "-r", "@-", "-T", "bookmarks" }, {
+              stdout_buffered = true,
+              on_stdout = function(_, data2, _)
+                if data2 and data2[1] ~= "" then
+                  local bookmarks = vim.trim(data2[1])
+                  local branch = bookmarks:match("([^%s]+)")
+                  if branch then
+                    callback(branch, "jj")
+                  else
+                    callback(nil)
+                  end
+                else
+                  callback(nil)
+                end
+              end,
+              on_stderr = function()
+                callback(nil)
+              end,
+            })
+          end,
+          on_stderr = function()
+            callback(nil)
           end,
         })
       else
