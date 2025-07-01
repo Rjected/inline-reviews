@@ -211,25 +211,12 @@ local function comment_previewer(opts)
       vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, preview_lines)
       vim.api.nvim_buf_set_option(self.state.bufnr, "modifiable", false)
       
-      -- Apply highlights first
-      for _, hl in ipairs(highlights) do
-        vim.api.nvim_buf_add_highlight(
-          self.state.bufnr,
-          -1,
-          hl.hl_group,
-          hl.line,
-          hl.col,
-          hl.end_col
-        )
-      end
-      
-      -- Apply syntax highlighting using treesitter or builtin
+      -- Apply highlights and treesitter
       vim.schedule(function()
         if vim.api.nvim_buf_is_valid(self.state.bufnr) then
           -- Determine filetype from filename
           local ft = vim.filetype.match({ filename = filename })
           if not ft then
-            -- Try by extension
             local ext = vim.fn.fnamemodify(filename, ":e")
             local ext_to_ft = {
               rs = "rust",
@@ -247,38 +234,53 @@ local function comment_previewer(opts)
               sh = "sh",
               bash = "bash",
               zsh = "zsh",
-              yml = "yaml",
-              yaml = "yaml",
-              json = "json",
-              md = "markdown",
-              vim = "vim",
-              toml = "toml",
-              xml = "xml",
-              html = "html",
-              css = "css",
             }
             ft = ext_to_ft[ext] or ext
           end
           
+          -- Apply syntax highlighting to the code section only
           if ft and ft ~= "" then
-            -- Set filetype to trigger syntax highlighting
-            vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", ft)
+            -- Calculate code section bounds
+            local code_start_line = 3  -- After header and blank line
+            local code_end_line = 2 + (end_line - start_line + 1)
             
-            -- Reapply our custom highlights after syntax loads
-            vim.defer_fn(function()
-              if vim.api.nvim_buf_is_valid(self.state.bufnr) then
-                for _, hl in ipairs(highlights) do
-                  vim.api.nvim_buf_add_highlight(
-                    self.state.bufnr,
-                    -1,
-                    hl.hl_group,
-                    hl.line,
-                    hl.col,
-                    hl.end_col
-                  )
+            -- Use buffer-local syntax commands to highlight only the code region
+            vim.api.nvim_buf_call(self.state.bufnr, function()
+              -- Clear any existing syntax
+              vim.cmd("syntax clear")
+              
+              -- Define a custom syntax region that includes the appropriate filetype
+              -- but only applies to our code lines
+              local syntax_cmds = {
+                -- Include the syntax for the detected filetype
+                string.format("silent! syntax include @%sCode syntax/%s.vim", ft, ft),
+                -- Create a region that contains this syntax, but only for code lines
+                string.format("syntax region InlineReviewCode start=/\\%%%dl/ end=/\\%%%dl/ contains=@%sCode keepend", 
+                  code_start_line, code_end_line, ft),
+                -- Ensure everything else is not highlighted
+                string.format("syntax region InlineReviewComments start=/\\%%%dl/ end=/\\%%$/ contains=NONE", 
+                  code_end_line + 1),
+              }
+              
+              for _, cmd in ipairs(syntax_cmds) do
+                local ok, err = pcall(vim.cmd, cmd)
+                if not ok and vim.g.inline_reviews_debug then
+                  vim.notify("Syntax error: " .. err, vim.log.levels.DEBUG)
                 end
               end
-            end, 10)
+            end)
+          end
+          
+          -- Apply our custom highlights on top
+          for _, hl in ipairs(highlights) do
+            vim.api.nvim_buf_add_highlight(
+              self.state.bufnr,
+              -1,
+              hl.hl_group,
+              hl.line,
+              hl.col,
+              hl.end_col
+            )
           end
         end
       end)
