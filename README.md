@@ -7,6 +7,7 @@ A Neovim plugin that displays GitHub PR review comments inline without disruptin
 - 🔍 **Non-intrusive display**: Comments shown as sign column markers and optional virtual text hints
 - 🚀 **Quick navigation**: Jump between comments with `]c` and `[c`
 - 👁️ **Hover preview**: View full comment threads in floating windows
+- 💬 **Interactive comments**: Reply to comments, add reactions, and resolve threads
 - 🔄 **Auto-detection**: Automatically loads comments when opening files from a PR branch
 - 🎯 **Focused workflow**: Stay in your editor while reviewing PR feedback
 - ⚡ **Fast and cached**: Uses GitHub CLI with intelligent caching
@@ -55,6 +56,13 @@ require("inline-reviews").setup({
     max_width = 80,               -- Max width for hover window
     border = "rounded",           -- Border style for hover window
   },
+  interactions = {
+    enabled = true,               -- Enable comment interactions
+    reply_key = "r",              -- Reply to comment in hover
+    react_key = "e",              -- Add reaction in hover
+    resolve_key = "s",            -- Toggle resolve status
+    show_action_hints = true,     -- Show action hints in hover
+  },
   github = {
     gh_cmd = "gh",                -- GitHub CLI command
     cache_ttl = 300,              -- Cache TTL in seconds
@@ -99,6 +107,20 @@ This works with both:
 - `]c` - Jump to next comment
 - `[c` - Jump to previous comment
 - `<leader>rt` - Toggle showing resolved comments
+
+### Hover Window Interactions
+
+When viewing comments in the hover window, you can:
+
+- **Reply to comments**: Press `r` to open a reply input box
+  - Type your message (multi-line supported with Enter)
+  - Submit with `Ctrl-Enter`, cancel with `Esc`
+- **Add reactions**: Press `e` to open the reaction picker
+  - Choose from: 👍 👎 😄 🎉 😕 ❤️ 🚀 👀
+  - Use number keys 1-8 for quick selection
+- **Resolve/Unresolve threads**: Press `s` on the thread header
+  - Only available for non-outdated threads
+  - Requires appropriate permissions
 
 ### Telescope Integration
 

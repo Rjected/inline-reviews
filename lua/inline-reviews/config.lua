@@ -24,6 +24,13 @@ local defaults = {
     max_width = 80,
     border = "rounded",
   },
+  interactions = {
+    enabled = true,                -- Enable comment interactions
+    reply_key = "r",              -- Key to reply to comment in hover
+    react_key = "e",              -- Key to add reaction in hover
+    resolve_key = "s",            -- Key to toggle resolve status in hover
+    show_action_hints = true,     -- Show action hints in hover window
+  },
   github = {
     gh_cmd = "gh",
     cache_ttl = 300,

@@ -5,6 +5,7 @@ local config = require("inline-reviews.config")
 -- Store comments indexed by file path and line number
 local comments_by_file = {}
 local all_comments = {}
+local current_pr_number = nil
 
 local function normalize_path(path)
   -- Remove leading slash if present
@@ -209,6 +210,18 @@ end
 -- Internal function for telescope extension
 function M._get_all_comments()
   return all_comments
+end
+
+function M.set_current_pr(pr_number)
+  current_pr_number = pr_number
+end
+
+function M.get_current_pr()
+  return current_pr_number
+end
+
+function M.set_comments(review_threads)
+  M.load_comments(review_threads)
 end
 
 return M

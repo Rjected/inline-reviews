@@ -81,6 +81,9 @@ end
 function M.load_pr(pr_number)
   vim.notify("Loading PR #" .. pr_number .. " comments...", vim.log.levels.INFO)
   
+  -- Store the current PR number
+  comments.set_current_pr(pr_number)
+  
   github.get_pr_info(pr_number, function(pr_info)
     if not pr_info then
       vim.notify("Failed to load PR #" .. pr_number, vim.log.levels.ERROR)
