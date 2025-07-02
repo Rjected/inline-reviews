@@ -21,6 +21,7 @@ Ever lose your flow jumping between GitHub and your editor during PR reviews? Th
 
 - Neovim >= 0.9.0
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for enhanced UI
 
 ## Installation
 
@@ -129,6 +130,27 @@ auto_refresh = {
   interval = 300  -- 5 minutes
 }
 ```
+
+### UI Backend (snacks.nvim integration)
+
+The plugin integrates with [snacks.nvim](https://github.com/folke/snacks.nvim) for improved UI components:
+
+```lua
+ui = {
+  backend = "auto"  -- "auto", "snacks", or "native"
+  -- auto: use snacks.nvim if available (default)
+  -- snacks: always use snacks.nvim (error if not installed)
+  -- native: always use built-in UI
+}
+```
+
+When snacks.nvim is available:
+- Notifications use snacks.notify for better styling and stacking
+- Reaction picker uses snacks.select for consistent UI
+- Comment input uses snacks.input for a cleaner experience
+- Comment browser (`<leader>rC`) uses snacks.picker instead of telescope
+
+The plugin automatically detects which UI library is available and uses the best option. You can force a specific backend with the `ui.backend` config option.
 
 ## Quick start
 

@@ -1,51 +1,6 @@
 local M = {}
 
-function M.review_comments_query(pr_number)
-  -- GraphQL query to fetch all review comments for a PR
-  return string.format([[
-    query {
-      viewer {
-        login
-      }
-      repository(owner: "OWNER", name: "REPO") {
-        pullRequest(number: %d) {
-          reviewThreads(first: 100) {
-            nodes {
-              id
-              path
-              line
-              originalLine
-              diffSide
-              isResolved
-              isOutdated
-              comments(first: 50) {
-                nodes {
-                  id
-                  body
-                  author {
-                    login
-                    avatarUrl
-                  }
-                  createdAt
-                  lastEditedAt
-                  diffHunk
-                  position
-                  originalPosition
-                  reactionGroups {
-                    content
-                    users {
-                      totalCount
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  ]], pr_number)
-end
+local notifier = require("inline-reviews.ui.notifier")
 
 function M.parse_review_comments(response)
   local comments = {}
@@ -156,7 +111,7 @@ end
 function M.review_comments_query(pr_number)
   local owner, repo = M.get_repo_info()
   if not owner or not repo then
-    vim.notify("Could not determine repository info", vim.log.levels.ERROR)
+    notifier.error("Could not determine repository info")
     return nil
   end
   

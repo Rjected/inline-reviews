@@ -1,5 +1,7 @@
 local M = {}
 
+local notifier = require("inline-reviews.ui.notifier")
+
 local defaults = {
   auto_load = false,
   keymaps = {
@@ -52,6 +54,12 @@ local defaults = {
     enabled = false,               -- Auto-refresh comments periodically
     interval = 300,                -- Refresh interval in seconds (5 minutes)
   },
+  ui = {
+    backend = "auto",             -- UI backend: "auto", "snacks", "native"
+                                   -- auto: use snacks.nvim if available
+                                   -- snacks: always use snacks.nvim (error if not available)
+                                   -- native: always use built-in UI
+  },
 }
 
 M.options = {}
@@ -62,7 +70,7 @@ function M.setup(opts)
   -- Validate gh command exists
   local gh_exists = vim.fn.executable(M.options.github.gh_cmd) == 1
   if not gh_exists then
-    vim.notify("GitHub CLI (gh) not found. Please install it first.", vim.log.levels.ERROR)
+    notifier.error("GitHub CLI (gh) not found. Please install it first.")
     return false
   end
   

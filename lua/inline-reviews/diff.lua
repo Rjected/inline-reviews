@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 -- Cache for line mappings
 local mappings_cache = {}
@@ -37,7 +38,7 @@ local function build_line_mappings(diff_lines)
   local current_new_line = nil
   
   if vim.g.inline_reviews_debug then
-    vim.notify("Building line mappings from " .. #diff_lines .. " diff lines", vim.log.levels.DEBUG)
+    notifier.debug("Building line mappings from " .. #diff_lines .. " diff lines")
   end
   
   for _, line in ipairs(diff_lines) do
@@ -49,9 +50,8 @@ local function build_line_mappings(diff_lines)
         current_new_line = hunk.new_start
         
         if vim.g.inline_reviews_debug then
-          vim.notify(string.format("Hunk: old %d,%d -> new %d,%d", 
-            hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count), 
-            vim.log.levels.DEBUG)
+          notifier.debug(string.format("Hunk: old %d,%d -> new %d,%d", 
+            hunk.old_start, hunk.old_count, hunk.new_start, hunk.new_count))
         end
       end
     elseif current_old_line and current_new_line then
@@ -79,7 +79,7 @@ local function build_line_mappings(diff_lines)
   
   if vim.g.inline_reviews_debug then
     local mapped_count = vim.tbl_count(old_to_new)
-    vim.notify("Mapped " .. mapped_count .. " lines", vim.log.levels.DEBUG)
+    notifier.debug("Mapped " .. mapped_count .. " lines")
   end
   
   return old_to_new, new_to_old
@@ -172,7 +172,7 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
     if not old_to_new then
       -- No mapping available, return original line
       if vim.g.inline_reviews_debug then
-        vim.notify(string.format("No mapping available for %s:%d", file_path, old_line), vim.log.levels.DEBUG)
+        notifier.debug(string.format("No mapping available for %s:%d", file_path, old_line))
       end
       callback(old_line)
       return
@@ -182,7 +182,7 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
     local new_line = old_to_new[old_line]
     if new_line then
       if vim.g.inline_reviews_debug then
-        vim.notify(string.format("Direct mapping: %s:%d -> %d", file_path, old_line, new_line), vim.log.levels.DEBUG)
+        notifier.debug(string.format("Direct mapping: %s:%d -> %d", file_path, old_line, new_line))
       end
       callback(new_line)
       return
@@ -196,8 +196,8 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
         local offset = old_line - i
         local estimated = old_to_new[i] + offset
         if vim.g.inline_reviews_debug then
-          vim.notify(string.format("Estimated mapping (up): %s:%d -> %d (base %d + offset %d)", 
-            file_path, old_line, estimated, old_to_new[i], offset), vim.log.levels.DEBUG)
+          notifier.debug(string.format("Estimated mapping (up): %s:%d -> %d (base %d + offset %d)", 
+            file_path, old_line, estimated, old_to_new[i], offset))
         end
         callback(estimated)
         return
@@ -209,8 +209,8 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
       if old_to_new[i] then
         -- Found a mapped line below
         if vim.g.inline_reviews_debug then
-          vim.notify(string.format("Nearest mapping (down): %s:%d -> %d", 
-            file_path, old_line, old_to_new[i]), vim.log.levels.DEBUG)
+          notifier.debug(string.format("Nearest mapping (down): %s:%d -> %d", 
+            file_path, old_line, old_to_new[i]))
         end
         callback(old_to_new[i])
         return
@@ -219,7 +219,7 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
     
     -- No mapping found, return original
     if vim.g.inline_reviews_debug then
-      vim.notify(string.format("No mapping found: %s:%d -> %d (unchanged)", file_path, old_line, old_line), vim.log.levels.DEBUG)
+      notifier.debug(string.format("No mapping found: %s:%d -> %d (unchanged)", file_path, old_line, old_line))
     end
     callback(old_line)
   end)

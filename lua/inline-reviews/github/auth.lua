@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 function M.check(callback)
   local gh_cmd = config.get().github.gh_cmd
@@ -10,7 +11,7 @@ function M.check(callback)
       if exit_code == 0 then
         callback(true)
       else
-        vim.notify("GitHub CLI not authenticated. Run 'gh auth login' first.", vim.log.levels.ERROR)
+        notifier.error("GitHub CLI not authenticated. Run 'gh auth login' first.")
         callback(false)
       end
     end,

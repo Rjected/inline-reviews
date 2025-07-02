@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 local hover_win = nil
 local hover_buf = nil
@@ -422,7 +423,7 @@ function M.show(threads)
                 if result_callback then
                   result_callback(false, err)
                 end
-                vim.notify("Failed to add reply: " .. err, vim.log.levels.ERROR)
+                notifier.error("Failed to add reply: " .. err)
               else
                 if result_callback then
                   result_callback(true)
@@ -486,12 +487,12 @@ function M.show(threads)
           current_reactions = comment_data.reactions,
           parent_win = hover_win,
           on_select = function(emoji, content)
-            vim.notify("Adding reaction...", vim.log.levels.INFO)
+            notifier.info("Adding reaction...")
             mutations.add_reaction(comment_meta.comment_id, content, function(result, err)
               if err then
-                vim.notify("Failed to add reaction: " .. err, vim.log.levels.ERROR)
+                notifier.error("Failed to add reaction: " .. err)
               else
-                vim.notify("Reaction added!", vim.log.levels.INFO)
+                notifier.info("Reaction added!")
                 -- Refresh the display
                 vim.schedule(function()
                   M.refresh()
@@ -520,12 +521,12 @@ function M.show(threads)
         local mutations = require("inline-reviews.github.mutations")
         
         if meta.is_resolved then
-          vim.notify("Unresolving thread...", vim.log.levels.INFO)
+          notifier.info("Unresolving thread...")
           mutations.unresolve_thread(meta.thread_id, function(result, err)
             if err then
-              vim.notify("Failed to unresolve thread: " .. err, vim.log.levels.ERROR)
+              notifier.error("Failed to unresolve thread: " .. err)
             else
-              vim.notify("Thread unresolved!", vim.log.levels.INFO)
+              notifier.info("Thread unresolved!")
               -- Refresh the display
               vim.schedule(function()
                 M.refresh()
@@ -533,12 +534,12 @@ function M.show(threads)
             end
           end)
         else
-          vim.notify("Resolving thread...", vim.log.levels.INFO)
+          notifier.info("Resolving thread...")
           mutations.resolve_thread(meta.thread_id, function(result, err)
             if err then
-              vim.notify("Failed to resolve thread: " .. err, vim.log.levels.ERROR)
+              notifier.error("Failed to resolve thread: " .. err)
             else
-              vim.notify("Thread resolved!", vim.log.levels.INFO)
+              notifier.info("Thread resolved!")
               -- Refresh the display
               vim.schedule(function()
                 M.refresh()

@@ -8,6 +8,7 @@ local entry_display = require("telescope.pickers.entry_display")
 local previewers = require("telescope.previewers")
 
 local comments = require("inline-reviews.comments")
+local notifier = require("inline-reviews.ui.notifier")
 
 local function get_all_comments()
   local results = {}
@@ -265,7 +266,7 @@ local function comment_previewer(opts)
               for _, cmd in ipairs(syntax_cmds) do
                 local ok, err = pcall(vim.cmd, cmd)
                 if not ok and vim.g.inline_reviews_debug then
-                  vim.notify("Syntax error: " .. err, vim.log.levels.DEBUG)
+                  notifier.debug("Syntax error: " .. err)
                 end
               end
             end)
@@ -301,7 +302,7 @@ local function inline_reviews_picker(opts)
   local comment_entries = get_all_comments()
   
   if #comment_entries == 0 then
-    vim.notify("No PR comments loaded. Use :InlineComments <PR_NUMBER> first.", vim.log.levels.INFO)
+    notifier.info("No PR comments loaded. Use :InlineComments <PR_NUMBER> first.")
     return
   end
   
