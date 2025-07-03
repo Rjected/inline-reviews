@@ -125,6 +125,8 @@ Browse all comments with `<leader>rC` or `:InlineCommentsTelescope`.
 **Hover window**: Full thread with reactions, diffs, and actions  
 **Displaced comments**: Shows `[originally line 123]` when code moves  
 
+https://github.com/user-attachments/assets/b650ba5e-c10c-4667-98c4-21f28a55b6f9
+
 ## Smart features
 
 ### Comments follow your code
