@@ -100,12 +100,20 @@ Works with both Git branches and jj bookmarks.
 
 Reply with `Ctrl-s` to submit, `Esc` to cancel.
 
-### Telescope
+### Comment Browser
 
 Browse all comments with `<leader>rC` or `:InlineCommentsTelescope`.
 
+**Telescope**:
 `<Enter>` - Jump to comment  
-`<C-v>` - Open in split  
+`<C-v>` - Open in split
+
+**Snacks.nvim picker** (when available):
+`<Enter>` - Jump to comment  
+`?` - Show help with all keybindings  
+`<C-f>` - Filter by status  
+`<C-a>` - Filter by author  
+`<C-p>` - Toggle auto-close  
 
 ## How it looks
 
@@ -149,8 +157,63 @@ When snacks.nvim is available:
 - Reaction picker uses snacks.select for consistent UI
 - Comment input uses snacks.input for a cleaner experience
 - Comment browser (`<leader>rC`) uses snacks.picker instead of telescope
+- Status column integration shows comment indicators (opt-in)
 
 The plugin automatically detects which UI library is available and uses the best option. You can force a specific backend with the `ui.backend` config option.
+
+### Advanced Features
+
+#### Status Column Integration
+
+Show PR comments directly in your status column with snacks.nvim:
+
+```lua
+statuscolumn = {
+  enabled = true,               -- Enable statuscolumn integration
+  component_position = "left",  -- "left" or "right"
+  show_count = true,           -- Show number when multiple comments
+  show_outdated = true,        -- Show outdated indicator
+  max_count = 9,               -- Show "9+" for more
+  icons = {
+    comment = "●",             -- Unresolved comment
+    resolved = "✓",            -- Resolved comment
+    outdated = "○",            -- Outdated comment
+  }
+}
+```
+
+#### Advanced Picker
+
+The snacks.nvim picker supports advanced layouts and filtering:
+
+```lua
+picker = {
+  layout = "float",            -- "float", "split", "vsplit"
+  split_width = 40,            -- Width for vsplit
+  split_height = 15,           -- Height for split
+  auto_close = true,           -- Auto close on selection
+  filters = {
+    enabled = true,
+    default = "status:unresolved",  -- Default filter
+  },
+  keymaps = {
+    filter_status = "<C-f>",   -- Filter by status
+    filter_author = "<C-a>",   -- Filter by author
+    pin_window = "<C-p>",      -- Toggle auto-close
+  }
+}
+```
+
+**Using the picker**:
+1. Open with `<leader>rC`
+2. Press `?` to see all available keybindings
+3. Use `<C-f>` to filter by status (resolved/unresolved)
+4. Use `<C-a>` to filter by author name
+5. Use `<C-p>` to keep the picker open while navigating
+
+**Filter syntax**: `author:username status:resolved filetype:rust outdated:true`
+
+In split/vsplit mode, the picker stays open as a sidebar while you navigate comments. The preview dynamically adjusts to show more comments when there's available space.
 
 ## Quick start
 

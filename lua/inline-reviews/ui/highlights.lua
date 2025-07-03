@@ -16,6 +16,11 @@ function M.setup()
     -- Sign column
     InlineReviewSign = { link = "DiagnosticSignInfo" },
     InlineReviewResolvedSign = { link = "DiagnosticSignHint" },
+    
+    -- Statuscolumn highlights
+    InlineReviewCommentSign = { link = "DiagnosticSignInfo" },
+    InlineReviewResolvedSign = { link = "DiagnosticSignHint" },
+    InlineReviewOutdatedSign = { link = "DiagnosticSignWarn" },
   }
   
   for group, opts in pairs(highlights) do

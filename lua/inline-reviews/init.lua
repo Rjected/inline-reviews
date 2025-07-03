@@ -17,6 +17,11 @@ function M.setup(opts)
   -- Initialize UI after config is set up
   ui.setup()
   
+  -- Setup statuscolumn if enabled
+  if config.get().statuscolumn and config.get().statuscolumn.enabled then
+    require("inline-reviews.ui.statuscolumn_simple").setup()
+  end
+  
   -- Set up keymaps
   local keymaps = config.get().keymaps
   for action, key in pairs(keymaps) do

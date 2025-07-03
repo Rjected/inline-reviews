@@ -36,9 +36,104 @@ local function has_telescope()
   return ok
 end
 
+-- Parse filter string into structured filter
+local function parse_filter(filter_str)
+  local filters = {
+    author = nil,
+    status = nil,
+    filetype = nil,
+    outdated = nil,
+  }
+  
+  if not filter_str or filter_str == "" then
+    return filters
+  end
+  
+  -- Parse filter patterns like "author:username status:resolved"
+  for key, value in filter_str:gmatch("(%w+):(%S+)") do
+    if key == "author" or key == "status" or key == "filetype" or key == "outdated" then
+      filters[key] = value
+    end
+  end
+  
+  return filters
+end
+
+-- Apply filters to comment entries
+local function apply_filters(entries, filter_str)
+  local filters = parse_filter(filter_str)
+  
+  -- Check if we have any active filters
+  local has_filters = false
+  for k, v in pairs(filters) do
+    if v then
+      has_filters = true
+      break
+    end
+  end
+  
+  -- No filters, return all
+  if not has_filters then
+    return entries
+  end
+  
+  local filtered = {}
+  for _, entry in ipairs(entries) do
+    local include = true
+    
+    -- Author filter
+    if filters.author then
+      local has_author = false
+      for _, comment in ipairs(entry.thread.comments) do
+        if comment.author:lower():find(filters.author:lower()) then
+          has_author = true
+          break
+        end
+      end
+      if not has_author then
+        include = false
+      end
+    end
+    
+    -- Status filter
+    if filters.status and include then
+      if filters.status == "resolved" and not entry.thread.is_resolved then
+        include = false
+      elseif filters.status == "unresolved" and entry.thread.is_resolved then
+        include = false
+      end
+    end
+    
+    -- Filetype filter
+    if filters.filetype and include then
+      local ft = vim.filetype.match({ filename = entry.file }) or ""
+      if ft ~= filters.filetype then
+        include = false
+      end
+    end
+    
+    -- Outdated filter
+    if filters.outdated and include then
+      local is_outdated = entry.thread.is_outdated
+      if filters.outdated == "true" and not is_outdated then
+        include = false
+      elseif filters.outdated == "false" and is_outdated then
+        include = false
+      end
+    end
+    
+    if include then
+      table.insert(filtered, entry)
+    end
+  end
+  
+  return filtered
+end
+
 -- Show picker using snacks.nvim
 local function show_with_snacks()
   local snacks = require("snacks")
+  local picker_config = config.get().picker or {}
   
   -- Get all comments
   local all_threads = comments._get_all_comments()
@@ -47,10 +142,14 @@ local function show_with_snacks()
     return
   end
   
+  -- Apply default filter if configured
+  local current_filter = picker_config.filters and picker_config.filters.default or ""
+  local filtered_threads = apply_filters(all_threads, current_filter)
+  
   -- Create items as objects with text property
   local items = {}
   
-  for _, comment_entry in ipairs(all_threads) do
+  for _, comment_entry in ipairs(filtered_threads) do
     local thread = comment_entry.thread
     local comment = thread.comments[1]
     local prefix = thread.is_resolved and "[✓] " or ""
@@ -131,9 +230,35 @@ local function show_with_snacks()
     })
   end
   
+  -- Determine layout configuration
+  local layout_config = {}
+  if picker_config.layout == "split" then
+    layout_config.layout = {
+      preset = "bottom",
+      height = picker_config.split_height or 15,
+    }
+  elseif picker_config.layout == "vsplit" then
+    layout_config.layout = {
+      preset = "right",
+      width = picker_config.split_width or 40,
+    }
+  else
+    -- Default float layout
+    layout_config.layout = {
+      preset = "float",
+    }
+  end
+  
+  -- Store picker instance for potential pinning
+  local picker_instance = nil
+  
+  -- Add help text about filtering
+  local help_text = picker_config.keymaps and picker_config.filters and picker_config.filters.enabled 
+    and " (Press ? for help)" or ""
+  
   -- Create picker with custom config
-  snacks.picker({
-    title = " PR Comments ",
+  local picker_opts = vim.tbl_deep_extend("force", layout_config, {
+    title = " PR Comments " .. (current_filter ~= "" and " [" .. current_filter .. "]" or "") .. help_text,
     items = picker_items,
     format = function(item)
       -- Format function should return highlight data, not just a string
@@ -196,10 +321,14 @@ local function show_with_snacks()
       table.insert(lines, "Thread: " .. status)
       table.insert(lines, "")
       
-      -- Add comments (limit to first few)
-      local max_comments = 2
+      -- Add comments (limit based on available space)
+      local win_height = vim.api.nvim_win_get_height(ctx.win)
+      local current_lines = #lines
+      local available_lines = win_height - current_lines - 5 -- Leave some buffer
+      local max_comments = math.max(1, math.floor(available_lines / 10)) -- Estimate ~10 lines per comment
+      
       for i, comment in ipairs(thread.comments) do
-        if i > max_comments then
+        if i > max_comments and #thread.comments > max_comments then
           table.insert(lines, "")
           table.insert(lines, "... " .. (#thread.comments - max_comments) .. " more comments ...")
           break
@@ -492,8 +621,10 @@ local function show_with_snacks()
         
         local comment_entry = item.comment_entry
         
-        -- Close picker
-        picker:close()
+        -- Only close if auto_close is enabled
+        if picker_config.auto_close then
+          picker:close()
+        end
         
         -- Open file
         vim.cmd("edit " .. vim.fn.fnameescape(comment_entry.file))
@@ -506,6 +637,121 @@ local function show_with_snacks()
       end,
     },
   })
+  
+  -- Add custom keymaps
+  if picker_config.keymaps then
+    -- Filter by status
+    if picker_config.keymaps.filter_status then
+      picker_opts.keys = picker_opts.keys or {}
+      picker_opts.keys[picker_config.keymaps.filter_status] = {
+        function()
+          vim.ui.input({
+            prompt = "Filter by status (resolved/unresolved): ",
+            default = current_filter:match("status:(%S+)") or "",
+          }, function(input)
+            if input then
+              -- Update filter
+              current_filter = current_filter:gsub("status:%S+", "")
+              if input ~= "" then
+                current_filter = current_filter .. " status:" .. input
+              end
+              current_filter = vim.trim(current_filter)
+              
+              -- Refresh picker
+              picker_instance:close()
+              vim.schedule(function()
+                show_with_snacks()
+              end)
+            end
+          end)
+        end,
+        desc = "Filter by status",
+      }
+    end
+    
+    -- Filter by author
+    if picker_config.keymaps.filter_author then
+      picker_opts.keys = picker_opts.keys or {}
+      picker_opts.keys[picker_config.keymaps.filter_author] = {
+        function()
+          vim.ui.input({
+            prompt = "Filter by author: ",
+            default = current_filter:match("author:(%S+)") or "",
+          }, function(input)
+            if input then
+              -- Update filter
+              current_filter = current_filter:gsub("author:%S+", "")
+              if input ~= "" then
+                current_filter = current_filter .. " author:" .. input
+              end
+              current_filter = vim.trim(current_filter)
+              
+              -- Refresh picker
+              picker_instance:close()
+              vim.schedule(function()
+                show_with_snacks()
+              end)
+            end
+          end)
+        end,
+        desc = "Filter by author",
+      }
+    end
+    
+    -- Pin window
+    if picker_config.keymaps.pin_window then
+      picker_opts.keys = picker_opts.keys or {}
+      picker_opts.keys[picker_config.keymaps.pin_window] = {
+        function()
+          picker_config.auto_close = not picker_config.auto_close
+          notifier.info("Picker auto-close: " .. (picker_config.auto_close and "enabled" or "disabled"))
+        end,
+        desc = "Toggle pin window",
+      }
+    end
+  end
+  
+  -- Add help key
+  picker_opts.keys = picker_opts.keys or {}
+  picker_opts.keys["?"] = {
+    function()
+      local help_lines = {
+        "PR Comments Picker Help",
+        "",
+        "Navigation:",
+        "  <CR>    Jump to comment",
+        "  <Esc>   Close picker",
+        "",
+        "Filtering:",
+      }
+      
+      if picker_config.keymaps.filter_status then
+        table.insert(help_lines, "  " .. picker_config.keymaps.filter_status .. "    Filter by status (resolved/unresolved)")
+      end
+      if picker_config.keymaps.filter_author then
+        table.insert(help_lines, "  " .. picker_config.keymaps.filter_author .. "    Filter by author")
+      end
+      
+      table.insert(help_lines, "")
+      table.insert(help_lines, "Other:")
+      
+      if picker_config.keymaps.pin_window then
+        table.insert(help_lines, "  " .. picker_config.keymaps.pin_window .. "    Toggle auto-close")
+      end
+      
+      table.insert(help_lines, "")
+      table.insert(help_lines, "Current filter: " .. (current_filter ~= "" and current_filter or "none"))
+      table.insert(help_lines, "")
+      table.insert(help_lines, "Filter syntax: author:name status:resolved filetype:rust")
+      
+      vim.notify(table.concat(help_lines, "\n"), vim.log.levels.INFO, {
+        title = "Inline Reviews Picker"
+      })
+    end,
+    desc = "Show help",
+  }
+  
+  picker_instance = snacks.picker(picker_opts)
 end
 
 -- Show picker using telescope

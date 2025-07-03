@@ -35,6 +35,12 @@ function M.refresh_buffer(bufnr)
   -- Clear existing marks
   M.clear_buffer(bufnr)
   
+  -- Clear statuscolumn cache
+  local ok, statuscolumn = pcall(require, "inline-reviews.ui.statuscolumn")
+  if ok then
+    statuscolumn.clear_cache(bufnr)
+  end
+  
   -- Get file path
   local file_path = vim.api.nvim_buf_get_name(bufnr)
   if file_path == "" then return end

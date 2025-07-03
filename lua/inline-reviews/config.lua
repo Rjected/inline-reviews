@@ -60,6 +60,35 @@ local defaults = {
                                    -- snacks: always use snacks.nvim (error if not available)
                                    -- native: always use built-in UI
   },
+  statuscolumn = {
+    enabled = false,              -- Enable statuscolumn integration (opt-in)
+    component_position = "left",  -- Position: "left" or "right"
+    show_count = true,            -- Show comment count
+    show_outdated = true,         -- Show outdated indicator
+    max_count = 9,                -- Show "9+" for more comments
+    icons = {
+      comment = "●",              -- Unresolved comment icon
+      resolved = "✓",             -- Resolved comment icon
+      outdated = "○",             -- Outdated comment icon
+    },
+  },
+  picker = {
+    layout = "float",             -- Layout: "float", "split", "vsplit"
+    split_width = 40,             -- Width for vsplit layout
+    split_height = 15,            -- Height for split layout
+    auto_close = true,            -- Auto close picker when jumping
+    filters = {
+      enabled = true,             -- Enable advanced filtering
+      default = "",               -- Default filter (e.g., "status:unresolved")
+    },
+    keymaps = {
+      toggle_resolved = "<C-s>",  -- Toggle resolved status
+      filter_author = "<C-a>",    -- Filter by author
+      filter_status = "<C-f>",    -- Filter by status
+      multi_select = "<Tab>",     -- Multi-select items
+      pin_window = "<C-p>",       -- Pin picker window
+    },
+  },
 }
 
 M.options = {}
