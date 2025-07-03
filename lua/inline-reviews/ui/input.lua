@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 local input_win = nil
 local input_buf = nil
@@ -8,10 +9,63 @@ local on_submit_callback = nil
 local on_cancel_callback = nil
 local parent_win = nil
 
--- Create a floating input window
-function M.show(opts)
-  opts = opts or {}
+-- Helper to check if snacks is available and user wants to use it
+local function use_snacks()
+  local cfg = config.get()
+  local backend = cfg.ui and cfg.ui.backend or "auto"
   
+  if backend == "native" then
+    return false
+  elseif backend == "snacks" then
+    local ok, snacks = pcall(require, "snacks")
+    if not ok or not snacks or not snacks.input then
+      error("snacks.nvim is not available but ui.backend is set to 'snacks'")
+    end
+    return true
+  else -- auto
+    local ok, snacks = pcall(require, "snacks")
+    return ok and snacks and snacks.input
+  end
+end
+
+-- Show input using snacks.nvim
+local function show_with_snacks(opts)
+  local snacks = require("snacks")
+  
+  local title = opts.title or "Reply"
+  local prompt = title .. " (Enter to submit, Esc to cancel): "
+  
+  -- Use snacks.input
+  snacks.input({
+    prompt = prompt,
+    default = opts.initial_text or "",
+    width = opts.width or 60,
+    on_confirm = function(value)
+      if value and value ~= "" then
+        if opts.on_submit then
+          -- Simulate the callback pattern used by native implementation
+          opts.on_submit(value, function(success, message)
+            if success then
+              notifier.info(message or "Submitted!")
+            else
+              notifier.error(message or "Failed to submit")
+            end
+          end)
+        end
+      else
+        notifier.warn("Cannot submit empty comment")
+      end
+    end,
+    on_cancel = function()
+      if opts.on_cancel then
+        opts.on_cancel()
+      end
+    end,
+  })
+end
+
+-- Native implementation continues below
+local function show_native(opts)
   -- Close any existing input
   M.close()
   
@@ -152,10 +206,22 @@ function M.show(opts)
   -- Don't show help text as virtual lines since it interferes with editing
 end
 
+-- Create a floating input window
+function M.show(opts)
+  opts = opts or {}
+  
+  if use_snacks() then
+    show_with_snacks(opts)
+    return
+  end
+  
+  show_native(opts)
+end
+
 function M.submit()
   if not input_buf or not vim.api.nvim_buf_is_valid(input_buf) then
     if vim.g.inline_reviews_debug then
-      vim.notify("Submit: invalid buffer", vim.log.levels.DEBUG)
+      notifier.debug("Submit: invalid buffer")
     end
     return
   end
@@ -170,14 +236,14 @@ function M.submit()
   local text = table.concat(lines, "\n"):gsub("^%s*(.-)%s*$", "%1")
   
   if vim.g.inline_reviews_debug then
-    vim.notify("Submit: text = " .. vim.inspect(text), vim.log.levels.DEBUG)
+    notifier.debug("Submit: text = " .. vim.inspect(text))
   end
   
   -- Save callback before updating UI
   local callback = on_submit_callback
   
   if text == "" then
-    vim.notify("Cannot submit empty comment", vim.log.levels.WARN)
+    notifier.warn("Cannot submit empty comment")
     return
   end
   
@@ -196,24 +262,30 @@ function M.submit()
       callback(text, function(success, message)
         -- Handle result
         if success then
+          -- Show success state briefly
           if input_win and vim.api.nvim_win_is_valid(input_win) then
             vim.api.nvim_win_set_config(input_win, {
               title = " Submitted! ",
               title_pos = "center",
             })
-            -- Close after short delay
+            -- Close after a short delay
             vim.defer_fn(function()
               M.close()
             end, 500)
+          else
+            M.close()
           end
         else
+          -- Show error and allow retry
           if input_win and vim.api.nvim_win_is_valid(input_win) then
             vim.api.nvim_win_set_config(input_win, {
-              title = " Failed: " .. (message or "Unknown error") .. " ",
+              title = " Failed! " .. (message or "") .. " ",
               title_pos = "center",
             })
-            -- Make editable again
+            -- Make buffer editable again
             vim.api.nvim_buf_set_option(input_buf, "modifiable", true)
+            -- Focus window
+            vim.api.nvim_set_current_win(input_win)
           end
         end
       end)
@@ -221,21 +293,13 @@ function M.submit()
       -- No callback, just close
       M.close()
     end
-  else
-    -- Window invalid, just try callback
-    if callback and text ~= "" then
-      callback(text)
-    end
   end
 end
 
 function M.cancel()
-  -- Call cancel callback if provided
   if on_cancel_callback then
     on_cancel_callback()
   end
-  
-  -- Close the window
   M.close()
 end
 

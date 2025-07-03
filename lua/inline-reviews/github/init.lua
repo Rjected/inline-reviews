@@ -3,6 +3,7 @@ local M = {}
 local config = require("inline-reviews.config")
 local auth = require("inline-reviews.github.auth")
 local graphql = require("inline-reviews.github.graphql")
+local notifier = require("inline-reviews.ui.notifier")
 
 local cache = {}
 local cache_timestamps = {}
@@ -46,7 +47,7 @@ local function run_gh_command(args, callback)
     on_exit = function(_, exit_code, _)
       -- Log the command for debugging
       if vim.g.inline_reviews_debug then
-        vim.notify("Command: " .. table.concat(cmd, " "), vim.log.levels.DEBUG)
+        notifier.debug("Command: " .. table.concat(cmd, " "))
       end
       
       -- Handle stderr
@@ -70,13 +71,24 @@ local function run_gh_command(args, callback)
       
       -- Log raw output for debugging
       if vim.g.inline_reviews_debug then
-        vim.notify("Raw output: " .. vim.inspect(stdout_str), vim.log.levels.DEBUG)
+        notifier.debug("Raw output: " .. vim.inspect(stdout_str))
       end
       
       -- Try to parse JSON
       local ok, result = pcall(vim.json.decode, stdout_str)
       if ok then
-        callback(result)
+        -- Wrap callback in pcall to catch errors
+        local cb_ok, cb_err = pcall(callback, result, nil)
+        if not cb_ok then
+          local error_msg = "Error in callback: " .. tostring(cb_err)
+          notifier.error(error_msg)
+          if vim.g.inline_reviews_debug then
+            notifier.error("Callback error details: " .. vim.inspect(cb_err))
+            notifier.error("Result that caused error: " .. vim.inspect(result))
+            notifier.error("Stack trace available in :messages")
+            vim.api.nvim_err_writeln(debug.traceback(error_msg, 2))
+          end
+        end
       else
         -- Log the parse error with context
         local preview = stdout_str:sub(1, 200)
@@ -196,7 +208,7 @@ function M.get_pr_info(pr_number, callback)
     "--json", "number,title,state,url,headRefName,baseRefName"
   }, function(result, err)
     if err then
-      vim.notify("Failed to get PR info: " .. err, vim.log.levels.ERROR)
+      notifier.error("Failed to get PR info: " .. err)
       callback(nil)
     else
       set_cache(cache_key, result)
@@ -219,7 +231,7 @@ function M.get_review_comments(pr_number, callback)
     "-f", "query=" .. query
   }, function(result, err)
     if err then
-      vim.notify("Failed to get review comments: " .. err, vim.log.levels.ERROR)
+      notifier.error("Failed to get review comments: " .. err)
       callback(nil)
       return
     end

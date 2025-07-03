@@ -1,5 +1,7 @@
 local M = {}
 
+local notifier = require("inline-reviews.ui.notifier")
+
 function M.debounce(fn, ms)
   local timer = nil
   
@@ -57,7 +59,7 @@ end
 function M.notify(msg, level)
   level = level or vim.log.levels.INFO
   vim.schedule(function()
-    vim.notify(msg, level, { title = "Inline Reviews" })
+    notifier.notify(msg, level, { title = "Inline Reviews" })
   end)
 end
 

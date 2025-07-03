@@ -4,6 +4,7 @@ local config = require("inline-reviews.config")
 local github = require("inline-reviews.github")
 local comments = require("inline-reviews.comments")
 local ui = require("inline-reviews.ui")
+local notifier = require("inline-reviews.ui.notifier")
 
 local current_pr = nil
 local loaded_buffers = {}
@@ -15,6 +16,11 @@ function M.setup(opts)
   
   -- Initialize UI after config is set up
   ui.setup()
+  
+  -- Setup statuscolumn if enabled
+  if config.get().statuscolumn and config.get().statuscolumn.enabled then
+    require("inline-reviews.ui.statuscolumn_simple").setup()
+  end
   
   -- Set up keymaps
   local keymaps = config.get().keymaps
@@ -68,6 +74,17 @@ function M.setup(opts)
     end,
   })
   
+  -- Also update virtual text when text changes
+  vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {
+    group = augroup,
+    callback = function()
+      -- Clear all virtual text and refresh for current cursor position
+      local bufnr = vim.api.nvim_get_current_buf()
+      require("inline-reviews.ui.virtual_text").clear_buffer(bufnr)
+      ui.update_virtual_text()
+    end,
+  })
+  
   -- Clean up on buffer delete
   vim.api.nvim_create_autocmd("BufDelete", {
     group = augroup,
@@ -116,14 +133,14 @@ function M.setup(opts)
 end
 
 function M.load_pr(pr_number)
-  vim.notify("Loading PR #" .. pr_number .. " comments...", vim.log.levels.INFO)
+  notifier.info("Loading PR #" .. pr_number .. " comments...")
   
   -- Store the current PR number
   comments.set_current_pr(pr_number)
   
   github.get_pr_info(pr_number, function(pr_info)
     if not pr_info then
-      vim.notify("Failed to load PR #" .. pr_number, vim.log.levels.ERROR)
+      notifier.error("Failed to load PR #" .. pr_number)
       return
     end
     
@@ -136,7 +153,7 @@ function M.load_pr(pr_number)
     
     github.get_review_comments(pr_number, function(review_comments)
       if not review_comments then
-        vim.notify("Failed to load comments for PR #" .. pr_number, vim.log.levels.ERROR)
+        notifier.error("Failed to load comments for PR #" .. pr_number)
         return
       end
       
@@ -144,7 +161,7 @@ function M.load_pr(pr_number)
       ui.refresh_all_buffers()
       
       local count = #review_comments
-      vim.notify(string.format("Loaded %d comment%s from PR #%d", 
+      notifier.info(string.format("Loaded %d comment%s from PR #%d", 
         count, count == 1 and "" or "s", pr_number), vim.log.levels.INFO)
     end)
   end)
@@ -161,14 +178,14 @@ end
 function M.reload(silent)
   if current_pr then
     if not silent then
-      vim.notify("Reloading PR #" .. current_pr.number .. " comments...", vim.log.levels.INFO)
+      notifier.info("Reloading PR #" .. current_pr.number .. " comments...")
     end
     
     local pr_number = current_pr.number
     github.get_review_comments(pr_number, function(review_comments)
       if not review_comments then
         if not silent then
-          vim.notify("Failed to reload comments", vim.log.levels.ERROR)
+          notifier.error("Failed to reload comments")
         end
         return
       end
@@ -178,13 +195,13 @@ function M.reload(silent)
       
       if not silent then
         local count = #review_comments
-        vim.notify(string.format("Reloaded %d comment%s from PR #%d", 
+        notifier.info(string.format("Reloaded %d comment%s from PR #%d", 
           count, count == 1 and "" or "s", pr_number), vim.log.levels.INFO)
       end
     end)
   else
     if not silent then
-      vim.notify("No PR loaded. Use :InlineComments <PR_NUMBER> first.", vim.log.levels.WARN)
+      notifier.warn("No PR loaded. Use :InlineComments <PR_NUMBER> first.")
     end
   end
 end
@@ -201,7 +218,7 @@ function M.clear()
     M._auto_refresh_timer = nil
   end
   
-  vim.notify("Cleared all inline comments", vim.log.levels.INFO)
+  notifier.info("Cleared all inline comments")
 end
 
 function M.view_comments()
@@ -221,7 +238,7 @@ function M.view_comments()
   if #thread_comments > 0 then
     ui.show_comment_hover(thread_comments)
   else
-    vim.notify("No comments on this line", vim.log.levels.INFO)
+    notifier.info("No comments on this line")
   end
 end
 
@@ -230,7 +247,7 @@ function M.next_comment()
   if next_line then
     vim.api.nvim_win_set_cursor(0, { next_line, 0 })
   else
-    vim.notify("No more comments", vim.log.levels.INFO)
+    notifier.info("No more comments")
   end
 end
 
@@ -239,7 +256,7 @@ function M.prev_comment()
   if prev_line then
     vim.api.nvim_win_set_cursor(0, { prev_line, 0 })
   else
-    vim.notify("No previous comments", vim.log.levels.INFO)
+    notifier.info("No previous comments")
   end
 end
 
@@ -247,7 +264,7 @@ function M.toggle_resolved()
   local opts = config.get()
   opts.display.show_resolved = not opts.display.show_resolved
   ui.refresh_all_buffers()
-  vim.notify("Resolved comments: " .. (opts.display.show_resolved and "shown" or "hidden"))
+  notifier.info("Resolved comments: " .. (opts.display.show_resolved and "shown" or "hidden"))
 end
 
 function M.has_comments_loaded()

@@ -1,6 +1,7 @@
 local M = {}
 
 local mutations = require("inline-reviews.github.mutations")
+local config = require("inline-reviews.config")
 
 local reaction_win = nil
 local reaction_buf = nil
@@ -19,10 +20,69 @@ local reactions = {
   { emoji = "👀", content = "EYES", key = "8" },
 }
 
--- Create reaction picker window
-function M.show(opts)
-  opts = opts or {}
+-- Helper to check if snacks is available and user wants to use it
+local function use_snacks()
+  local cfg = config.get()
+  local backend = cfg.ui and cfg.ui.backend or "auto"
   
+  if backend == "native" then
+    return false
+  elseif backend == "snacks" then
+    local ok, snacks = pcall(require, "snacks")
+    if not ok or not snacks or not snacks.select then
+      error("snacks.nvim is not available but ui.backend is set to 'snacks'")
+    end
+    return true
+  else -- auto
+    local ok, snacks = pcall(require, "snacks")
+    return ok and snacks and snacks.select
+  end
+end
+
+-- Show reaction picker using snacks.nvim
+local function show_with_snacks(opts)
+  local snacks = require("snacks")
+  
+  -- Build items for snacks.select
+  local items = {}
+  for _, r in ipairs(reactions) do
+    table.insert(items, {
+      text = string.format("%s %s", r.key, r.emoji),
+      emoji = r.emoji,
+      content = r.content,
+    })
+  end
+  
+  -- Format current reactions for the prompt
+  local prompt = "Select Reaction"
+  if opts.current_reactions then
+    local current_parts = {}
+    for _, reaction in ipairs(opts.current_reactions) do
+      if reaction.users.totalCount > 0 then
+        local emoji = mutations.content_to_emoji[reaction.content] or "?"
+        table.insert(current_parts, string.format("%s:%d", emoji, reaction.users.totalCount))
+      end
+    end
+    if #current_parts > 0 then
+      prompt = prompt .. " (Current: " .. table.concat(current_parts, " ") .. ")"
+    end
+  end
+  
+  snacks.select(items, {
+    prompt = prompt,
+    format_item = function(item)
+      return item.text
+    end,
+    on_confirm = function(item)
+      if item and opts.on_select then
+        opts.on_select(item.emoji, item.content)
+      end
+    end,
+  })
+end
+
+-- Create reaction picker window (native implementation)
+local function show_native(opts)
   -- Close any existing picker
   M.close()
   
@@ -160,6 +220,18 @@ function M.show(opts)
       end)
     end,
   })
+end
+
+-- Create reaction picker window
+function M.show(opts)
+  opts = opts or {}
+  
+  if use_snacks() then
+    show_with_snacks(opts)
+    return
+  end
+  
+  show_native(opts)
 end
 
 function M.select_reaction(emoji, content)

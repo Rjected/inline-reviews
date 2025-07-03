@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 -- Helper to run GraphQL mutations
 local function run_mutation(mutation_query, callback)
@@ -25,7 +26,7 @@ local function run_mutation(mutation_query, callback)
     end,
     on_exit = function(_, exit_code, _)
       if vim.g.inline_reviews_debug then
-        vim.notify("Mutation command: " .. table.concat(cmd, " "), vim.log.levels.DEBUG)
+        notifier.debug("Mutation command: " .. table.concat(cmd, " "))
       end
       
       local stderr_str = table.concat(stderr_data, "\n"):gsub("^%s*(.-)%s*$", "%1")

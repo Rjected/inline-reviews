@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("inline-reviews.config")
+local notifier = require("inline-reviews.ui.notifier")
 
 -- Store comments indexed by file path and line number
 local comments_by_file = {}
@@ -187,7 +188,7 @@ function M.get_next_comment_line()
       return comment_info.line
     elseif comment_info.file > current_file then
       -- Would need to open a different file
-      vim.notify("Next comment is in: " .. vim.fn.fnamemodify(comment_info.file, ":~:."), vim.log.levels.INFO)
+      notifier.info("Next comment is in: " .. vim.fn.fnamemodify(comment_info.file, ":~:."))
       return nil
     end
   end
@@ -215,7 +216,7 @@ function M.get_prev_comment_line()
       return comment_info.line
     elseif comment_info.file < current_file then
       -- Would need to open a different file
-      vim.notify("Previous comment is in: " .. vim.fn.fnamemodify(comment_info.file, ":~:."), vim.log.levels.INFO)
+      notifier.info("Previous comment is in: " .. vim.fn.fnamemodify(comment_info.file, ":~:."))
       return nil
     end
   end
@@ -313,7 +314,7 @@ function M.update_comment_positions()
   end)
   
   -- Refresh UI
-  ui.refresh_all()
+  ui.refresh_all_buffers()
 end
 
 -- Force refresh line mappings for a file
