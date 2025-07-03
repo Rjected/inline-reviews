@@ -2,6 +2,8 @@
 
 View and interact with GitHub PR comments directly in Neovim. No more context switching.
 
+> **Note**: This plugin was mostly vibe-coded with AI assistance. It works great, but the implementation might make you laugh (or cry). PRs welcome!
+
 ## Why?
 
 Ever lose your flow jumping between GitHub and your editor during PR reviews? This plugin keeps review comments right where they belong - next to your code. See comments, reply to them, add reactions, and resolve threads without leaving Neovim.
@@ -21,7 +23,8 @@ Ever lose your flow jumping between GitHub and your editor during PR reviews? Th
 
 - Neovim >= 0.9.0
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for enhanced UI
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for enhanced UI (highly recommended!)
+- Optional: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) for comment browser (if not using snacks)
 
 ## Installation
 
@@ -141,7 +144,7 @@ auto_refresh = {
 
 ### UI Backend (snacks.nvim integration)
 
-The plugin integrates with [snacks.nvim](https://github.com/folke/snacks.nvim) for improved UI components:
+The plugin integrates deeply with [snacks.nvim](https://github.com/folke/snacks.nvim) for a superior UI experience. While the plugin works without it, snacks.nvim is highly recommended for the best experience.
 
 ```lua
 ui = {
@@ -152,12 +155,14 @@ ui = {
 }
 ```
 
-When snacks.nvim is available:
-- Notifications use snacks.notify for better styling and stacking
-- Reaction picker uses snacks.select for consistent UI
-- Comment input uses snacks.input for a cleaner experience
-- Comment browser (`<leader>rC`) uses snacks.picker instead of telescope
-- Status column integration shows comment indicators (opt-in)
+**With snacks.nvim** you get:
+- 🔔 Better notifications with stacking and progress indicators
+- 🎨 Consistent UI components that match your theme
+- 🔍 Advanced picker with filtering, split layouts, and live preview
+- 📊 Status column integration to see comment indicators at a glance
+- ⚡ Smoother interactions with proper input handling
+
+**Without snacks.nvim**: The plugin falls back to basic Neovim UI components (floating windows, vim.ui.input, telescope for browsing).
 
 The plugin automatically detects which UI library is available and uses the best option. You can force a specific backend with the `ui.backend` config option.
 
@@ -230,6 +235,16 @@ In split/vsplit mode, the picker stays open as a sidebar while you navigate comm
 **Comments not showing?** Check you're on a PR branch and the PR has comments. Try `:InlineCommentsReload`.
 
 **Ctrl-s not working?** Your terminal might intercept it. Try `:w` or `:Submit` in the reply window instead.
+
+## Contributing
+
+This plugin was built with a "make it work" philosophy and heavy AI assistance. The code is functional but could use some love. If you find something that makes you go "hmm", you're probably right - PRs are very welcome!
+
+Areas that could use improvement:
+- Error handling (currently mostly "hope for the best")
+- Performance optimization (we query GitHub... a lot)
+- Test coverage (what tests?)
+- Code organization (vibes-based architecture)
 
 ## License
 
