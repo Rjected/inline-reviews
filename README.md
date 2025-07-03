@@ -23,7 +23,7 @@ Ever lose your flow jumping between GitHub and your editor during PR reviews? Th
 
 - Neovim >= 0.9.0
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for enhanced UI (highly recommended!)
+- Optional: [snacks.nvim](https://github.com/folke/snacks.nvim) for enhanced UI
 - Optional: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) for comment browser (if not using snacks)
 
 ## Installation
