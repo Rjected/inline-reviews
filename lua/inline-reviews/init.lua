@@ -271,4 +271,59 @@ function M.has_comments_loaded()
   return current_pr ~= nil
 end
 
+-- Test GitHub authentication and permissions
+function M.test_auth()
+  local github = require("inline-reviews.github")
+  local config_mod = require("inline-reviews.config")
+  local gh_cmd = config_mod.get().github.gh_cmd
+  
+  notifier.info("Testing GitHub authentication...")
+  
+  -- Test basic auth
+  vim.fn.jobstart({ gh_cmd, "auth", "status" }, {
+    stdout_buffered = true,
+    on_stdout = function(_, data, _)
+      if data and data[1] ~= "" then
+        notifier.info("Auth status: " .. table.concat(data, "\n"))
+      end
+    end,
+    on_stderr = function(_, data, _)
+      if data and data[1] ~= "" then
+        notifier.error("Auth error: " .. table.concat(data, "\n"))
+      end
+    end,
+  })
+  
+  -- Test GraphQL permissions
+  vim.defer_fn(function()
+    local test_query = [[
+      query {
+        viewer {
+          login
+          name
+        }
+      }
+    ]]
+    
+    vim.fn.jobstart({ gh_cmd, "api", "graphql", "-f", "query=" .. test_query }, {
+      stdout_buffered = true,
+      on_stdout = function(_, data, _)
+        if data and data[1] ~= "" then
+          local ok, result = pcall(vim.json.decode, table.concat(data, "\n"))
+          if ok and result.data and result.data.viewer then
+            notifier.info("GraphQL authenticated as: " .. result.data.viewer.login)
+          else
+            notifier.error("Failed to parse GraphQL response")
+          end
+        end
+      end,
+      on_stderr = function(_, data, _)
+        if data and data[1] ~= "" then
+          notifier.error("GraphQL error: " .. table.concat(data, "\n"))
+        end
+      end,
+    })
+  end, 500)
+end
+
 return M

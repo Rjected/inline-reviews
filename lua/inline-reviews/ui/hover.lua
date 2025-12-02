@@ -84,25 +84,32 @@ local function create_comment_lines(thread, max_width)
     local actions = ""
     local opts = config.get()
     if opts.interactions.enabled and opts.interactions.show_action_hints then
-      actions = string.format(" [%s: reply] [%s: react]", 
-        opts.interactions.reply_key, 
-        opts.interactions.react_key)
+      actions = string.format(" [%s: reply] [%s: react] [%s: open]",
+        opts.interactions.reply_key,
+        opts.interactions.react_key,
+        opts.interactions.open_in_browser_key)
     end
     local author_line = string.format("● %s • %s%s", comment.author, time or "", actions)
     table.insert(lines, author_line)
     
     -- Store metadata for this comment line
+    local prefix_before_actions = string.format("● %s • %s", comment.author, time or "")
     metadata[#lines] = {
       type = "comment_header",
       comment_id = comment.id,
       thread_id = thread.id,
-      actions_start = string.len(string.format("● %s • %s", comment.author, time or ""))
+      actions_start = vim.fn.strlen(prefix_before_actions)  -- Use byte length
     }
+    
+    -- Calculate the actual byte position after the bullet and space
+    local bullet_prefix = "● "
+    local author_start = vim.fn.strchars(bullet_prefix)  -- Use strchars for display width
+    local author_end = author_start + vim.fn.strchars(comment.author)
     
     table.insert(highlights, { 
       line = #lines - 1, 
-      col = 0, 
-      end_col = string.len(comment.author) + 2,
+      col = vim.fn.strlen(bullet_prefix),  -- Use byte length for col
+      end_col = vim.fn.strlen(bullet_prefix .. comment.author),  -- Use byte length
       hl_group = "InlineReviewAuthor" 
     })
     
@@ -128,10 +135,12 @@ local function create_comment_lines(thread, max_width)
     if comment.reactions and #comment.reactions > 0 then
       table.insert(lines, "")
       local reaction_parts = {}
+      local mutations = require("inline-reviews.github.mutations")
       for _, reaction in ipairs(comment.reactions) do
         if reaction.users.totalCount > 0 then
+          local emoji = mutations.content_to_emoji[reaction.content] or reaction.content
           table.insert(reaction_parts, string.format("%s %d", 
-            reaction.content, reaction.users.totalCount))
+            emoji, reaction.users.totalCount))
         end
       end
       if #reaction_parts > 0 then
@@ -487,18 +496,54 @@ function M.show(threads)
           current_reactions = comment_data.reactions,
           parent_win = hover_win,
           on_select = function(emoji, content)
-            notifier.info("Adding reaction...")
-            mutations.add_reaction(comment_meta.comment_id, content, function(result, err)
-              if err then
-                notifier.error("Failed to add reaction: " .. err)
-              else
-                notifier.info("Reaction added!")
-                -- Refresh the display
-                vim.schedule(function()
-                  M.refresh()
-                end)
+            -- Check if user has already reacted with this emoji
+            local already_reacted = false
+            if comment_data.reactions then
+              for _, reaction in ipairs(comment_data.reactions) do
+                if reaction.content == content and reaction.viewerHasReacted then
+                  already_reacted = true
+                  break
+                end
               end
-            end)
+            end
+            
+            if already_reacted then
+              notifier.info("Removing reaction " .. emoji .. "...")
+              mutations.remove_reaction(comment_meta.comment_id, content, function(result, err)
+                if err then
+                  notifier.error("Failed to remove reaction: " .. err)
+                else
+                  notifier.info("Reaction removed!")
+                  -- Reload all comments from GitHub to get the updated reactions
+                  vim.schedule(function()
+                    local inline_reviews = require("inline-reviews")
+                    inline_reviews.reload(true) -- Silent reload
+                    -- Then refresh the hover display after a short delay
+                    vim.defer_fn(function()
+                      M.refresh()
+                    end, 1000)
+                  end)
+                end
+              end)
+            else
+              notifier.info("Adding reaction " .. emoji .. "...")
+              mutations.add_reaction(comment_meta.comment_id, content, function(result, err)
+                if err then
+                  notifier.error("Failed to add reaction: " .. err)
+                else
+                  notifier.info("Reaction added!")
+                  -- Reload all comments from GitHub to get the new reaction
+                  vim.schedule(function()
+                    local inline_reviews = require("inline-reviews")
+                    inline_reviews.reload(true) -- Silent reload
+                    -- Then refresh the hover display after a short delay
+                    vim.defer_fn(function()
+                      M.refresh()
+                    end, 1000)
+                  end)
+                end
+              end)
+            end
           end,
         })
       end
@@ -516,10 +561,10 @@ function M.show(threads)
       local line = vim.api.nvim_win_get_cursor(0)[1]
       local metadata = vim.b[hover_buf].line_metadata
       local meta = metadata and metadata[line]
-      
+
       if meta and meta.type == "thread_header" then
         local mutations = require("inline-reviews.github.mutations")
-        
+
         if meta.is_resolved then
           notifier.info("Unresolving thread...")
           mutations.unresolve_thread(meta.thread_id, function(result, err)
@@ -554,7 +599,66 @@ function M.show(threads)
     desc = "Toggle resolve status"
     })
   end
-  
+
+  -- Open comment in browser
+  if opts.interactions.enabled and opts.interactions.open_in_browser_key then
+    vim.api.nvim_buf_set_keymap(hover_buf, "n", opts.interactions.open_in_browser_key, "", {
+    callback = function()
+      local line = vim.api.nvim_win_get_cursor(0)[1]
+      local metadata = vim.b[hover_buf].line_metadata
+
+      -- Find the nearest comment header
+      local comment_meta = nil
+      local comment_data = nil
+      for i = line, 1, -1 do
+        if metadata[i] and metadata[i].type == "comment_header" then
+          comment_meta = metadata[i]
+          -- Find the actual comment data
+          local threads = vim.b[hover_buf].threads
+          if threads then
+            for _, thread in ipairs(threads) do
+              for _, comment in ipairs(thread.comments) do
+                if comment.id == comment_meta.comment_id then
+                  comment_data = comment
+                  break
+                end
+              end
+              if comment_data then break end
+            end
+          end
+          break
+        end
+      end
+
+      if comment_data and comment_data.url then
+        -- Open URL in browser
+        local open_cmd
+        if vim.fn.has("mac") == 1 then
+          open_cmd = "open"
+        elseif vim.fn.has("unix") == 1 then
+          open_cmd = "xdg-open"
+        elseif vim.fn.has("win32") == 1 then
+          open_cmd = "start"
+        end
+
+        if open_cmd then
+          vim.fn.jobstart({ open_cmd, comment_data.url }, { detach = true })
+          notifier.info("Opening comment in browser...")
+        else
+          -- Fallback: copy URL to clipboard
+          vim.fn.setreg("+", comment_data.url)
+          notifier.info("URL copied to clipboard: " .. comment_data.url)
+        end
+      else
+        notifier.warn("No URL available for this comment")
+      end
+    end,
+    noremap = true,
+    silent = true,
+    desc = "Open comment in browser"
+    })
+  end
+
   -- Add keymap for toggling diff sections
   vim.api.nvim_buf_set_keymap(hover_buf, "n", "<CR>", "", {
     callback = function()

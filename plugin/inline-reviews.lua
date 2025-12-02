@@ -72,3 +72,7 @@ end, { desc = "Refresh diff mappings for current file" })
 vim.api.nvim_create_user_command("InlineCommentsRefresh", function()
   require("inline-reviews").reload()
 end, { desc = "Manually refresh PR comments from GitHub" })
+
+vim.api.nvim_create_user_command("InlineCommentsTestAuth", function()
+  require("inline-reviews").test_auth()
+end, { desc = "Test GitHub authentication and permissions" })

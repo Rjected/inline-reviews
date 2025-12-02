@@ -60,7 +60,11 @@ local function show_with_snacks(opts)
     for _, reaction in ipairs(opts.current_reactions) do
       if reaction.users.totalCount > 0 then
         local emoji = mutations.content_to_emoji[reaction.content] or "?"
-        table.insert(current_parts, string.format("%s:%d", emoji, reaction.users.totalCount))
+        local text = string.format("%s:%d", emoji, reaction.users.totalCount)
+        if reaction.viewerHasReacted then
+          text = text .. "✓"
+        end
+        table.insert(current_parts, text)
       end
     end
     if #current_parts > 0 then
@@ -115,7 +119,11 @@ local function show_native(opts)
     for _, reaction in ipairs(opts.current_reactions) do
       if reaction.users.totalCount > 0 then
         local emoji = mutations.content_to_emoji[reaction.content] or "?"
-        current_line = current_line .. string.format(" %s:%d ", emoji, reaction.users.totalCount)
+        local text = string.format(" %s:%d", emoji, reaction.users.totalCount)
+        if reaction.viewerHasReacted then
+          text = text .. "✓"
+        end
+        current_line = current_line .. text .. " "
       end
     end
     

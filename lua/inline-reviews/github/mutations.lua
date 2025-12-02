@@ -27,6 +27,7 @@ local function run_mutation(mutation_query, callback)
     on_exit = function(_, exit_code, _)
       if vim.g.inline_reviews_debug then
         notifier.debug("Mutation command: " .. table.concat(cmd, " "))
+        notifier.debug("Mutation query: " .. mutation_query)
       end
       
       local stderr_str = table.concat(stderr_data, "\n"):gsub("^%s*(.-)%s*$", "%1")
@@ -44,6 +45,9 @@ local function run_mutation(mutation_query, callback)
       
       local ok, result = pcall(vim.json.decode, stdout_str)
       if ok then
+        if vim.g.inline_reviews_debug then
+          notifier.debug("GraphQL response: " .. vim.inspect(result))
+        end
         -- Check for GraphQL errors
         if result.errors then
           local error_msg = "GraphQL errors: "
@@ -55,6 +59,9 @@ local function run_mutation(mutation_query, callback)
           callback(result.data)
         end
       else
+        if vim.g.inline_reviews_debug then
+          notifier.debug("Failed to parse JSON: " .. stdout_str)
+        end
         callback(nil, "Failed to parse JSON response")
       end
     end,
@@ -95,6 +102,10 @@ end
 
 -- Add a reaction to a comment
 function M.add_reaction(subject_id, content, callback)
+  if vim.g.inline_reviews_debug then
+    notifier.debug("Adding reaction: subject_id=" .. subject_id .. ", content=" .. content)
+  end
+  
   -- Valid reaction content: THUMBS_UP, THUMBS_DOWN, LAUGH, HOORAY, CONFUSED, HEART, ROCKET, EYES
   local mutation = string.format([[
     mutation {

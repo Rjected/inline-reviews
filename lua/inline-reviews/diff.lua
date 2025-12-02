@@ -170,14 +170,23 @@ end
 function M.map_line_to_current(file_path, old_line, base_ref, callback)
   M.get_line_mapping(file_path, base_ref, function(old_to_new, _)
     if not old_to_new then
-      -- No mapping available, return original line
+      -- No mapping available (diff failed), return original line
       if vim.g.inline_reviews_debug then
         notifier.debug(string.format("No mapping available for %s:%d", file_path, old_line))
       end
       callback(old_line)
       return
     end
-    
+
+    -- If mapping is empty, the file has no changes - return original line
+    if vim.tbl_isempty(old_to_new) then
+      if vim.g.inline_reviews_debug then
+        notifier.debug(string.format("Empty mapping (no diff) for %s:%d", file_path, old_line))
+      end
+      callback(old_line)
+      return
+    end
+
     -- Try direct mapping first
     local new_line = old_to_new[old_line]
     if new_line then
@@ -187,39 +196,48 @@ function M.map_line_to_current(file_path, old_line, base_ref, callback)
       callback(new_line)
       return
     end
-    
-    -- Line might have been deleted, try to find nearest mapped line
-    -- Search upward first
-    for i = old_line - 1, 1, -1 do
+
+    -- Line might have been deleted or is outside diff hunks
+    -- Only estimate if we find a nearby mapped line (within 10 lines)
+    -- This prevents wild estimates from distant hunks
+    local max_search_distance = 10
+
+    -- Search upward first (closer context is more reliable)
+    for i = old_line - 1, math.max(1, old_line - max_search_distance), -1 do
       if old_to_new[i] then
         -- Found a mapped line above, estimate position
         local offset = old_line - i
         local estimated = old_to_new[i] + offset
         if vim.g.inline_reviews_debug then
-          notifier.debug(string.format("Estimated mapping (up): %s:%d -> %d (base %d + offset %d)", 
+          notifier.debug(string.format("Estimated mapping (up): %s:%d -> %d (base %d + offset %d)",
             file_path, old_line, estimated, old_to_new[i], offset))
         end
         callback(estimated)
         return
       end
     end
-    
+
     -- Search downward
-    for i = old_line + 1, old_line + 100 do
+    for i = old_line + 1, old_line + max_search_distance do
       if old_to_new[i] then
-        -- Found a mapped line below
+        -- Found a mapped line below, estimate position
+        local offset = i - old_line
+        local estimated = old_to_new[i] - offset
+        -- Don't go below line 1
+        estimated = math.max(1, estimated)
         if vim.g.inline_reviews_debug then
-          notifier.debug(string.format("Nearest mapping (down): %s:%d -> %d", 
-            file_path, old_line, old_to_new[i]))
+          notifier.debug(string.format("Estimated mapping (down): %s:%d -> %d (base %d - offset %d)",
+            file_path, old_line, estimated, old_to_new[i], offset))
         end
-        callback(old_to_new[i])
+        callback(estimated)
         return
       end
     end
-    
-    -- No mapping found, return original
+
+    -- No nearby mapping found - the line is far from any diff hunks
+    -- Return original line (file likely unchanged in this region)
     if vim.g.inline_reviews_debug then
-      notifier.debug(string.format("No mapping found: %s:%d -> %d (unchanged)", file_path, old_line, old_line))
+      notifier.debug(string.format("No nearby mapping: %s:%d -> %d (unchanged)", file_path, old_line, old_line))
     end
     callback(old_line)
   end)

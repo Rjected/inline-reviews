@@ -31,51 +31,57 @@ end
 
 function M.refresh_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  
+
   -- Clear existing marks
   M.clear_buffer(bufnr)
-  
+
   -- Clear statuscolumn cache
   local ok, statuscolumn = pcall(require, "inline-reviews.ui.statuscolumn")
   if ok then
     statuscolumn.clear_cache(bufnr)
   end
-  
+
   -- Get file path
   local file_path = vim.api.nvim_buf_get_name(bufnr)
   if file_path == "" then return end
-  
+
+  -- Get buffer line count for validation
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+
   -- Get all comment lines for this file
   local comment_lines = comments.get_all_comment_lines_for_file(file_path)
-  
+
   for _, line in ipairs(comment_lines) do
-    local threads = comments.get_comments_for_line(file_path, line)
-    
-    -- Determine sign type
-    local all_resolved = true
-    for _, thread in ipairs(threads) do
-      if not thread.is_resolved then
-        all_resolved = false
-        break
+    -- Skip lines that are outside the buffer bounds
+    if line >= 1 and line <= line_count then
+      local threads = comments.get_comments_for_line(file_path, line)
+
+      -- Determine sign type
+      local all_resolved = true
+      for _, thread in ipairs(threads) do
+        if not thread.is_resolved then
+          all_resolved = false
+          break
+        end
       end
+
+      local sign_name = all_resolved and "InlineReviewResolved" or "InlineReviewComment"
+
+      -- Place sign
+      vim.fn.sign_place(
+        line,
+        SIGN_GROUP,
+        sign_name,
+        bufnr,
+        { lnum = line, priority = 100 }
+      )
+
+      -- Add highlight to line
+      local hl_group = all_resolved and "InlineReviewResolvedLine" or "InlineReviewCommentLine"
+      vim.api.nvim_buf_add_highlight(bufnr, NAMESPACE, hl_group, line - 1, 0, -1)
     end
-    
-    local sign_name = all_resolved and "InlineReviewResolved" or "InlineReviewComment"
-    
-    -- Place sign
-    vim.fn.sign_place(
-      line,
-      SIGN_GROUP,
-      sign_name,
-      bufnr,
-      { lnum = line, priority = 100 }
-    )
-    
-    -- Add highlight to line
-    local hl_group = all_resolved and "InlineReviewResolvedLine" or "InlineReviewCommentLine"
-    vim.api.nvim_buf_add_highlight(bufnr, NAMESPACE, hl_group, line - 1, 0, -1)
   end
-  
+
   active_buffers[bufnr] = true
 end
 
