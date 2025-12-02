@@ -134,34 +134,38 @@ end
 
 function M.load_pr(pr_number)
   notifier.info("Loading PR #" .. pr_number .. " comments...")
-  
+
+  -- Clear diff cache when loading a new PR
+  local diff = require("inline-reviews.diff")
+  diff.clear_all_cache()
+
   -- Store the current PR number
   comments.set_current_pr(pr_number)
-  
+
   github.get_pr_info(pr_number, function(pr_info)
     if not pr_info then
       notifier.error("Failed to load PR #" .. pr_number)
       return
     end
-    
+
     current_pr = pr_info
-    
-    -- Set the base ref for diff tracking
+
+    -- Set the base ref for diff tracking (kept for reference/debug, but not used for diffing)
     if pr_info.baseRefName then
       comments.set_pr_base_ref(pr_info.baseRefName)
     end
-    
+
     github.get_review_comments(pr_number, function(review_comments)
       if not review_comments then
         notifier.error("Failed to load comments for PR #" .. pr_number)
         return
       end
-      
+
       comments.load_comments(review_comments)
       ui.refresh_all_buffers()
-      
+
       local count = #review_comments
-      notifier.info(string.format("Loaded %d comment%s from PR #%d", 
+      notifier.info(string.format("Loaded %d comment%s from PR #%d",
         count, count == 1 and "" or "s", pr_number), vim.log.levels.INFO)
     end)
   end)
@@ -276,9 +280,9 @@ function M.test_auth()
   local github = require("inline-reviews.github")
   local config_mod = require("inline-reviews.config")
   local gh_cmd = config_mod.get().github.gh_cmd
-  
+
   notifier.info("Testing GitHub authentication...")
-  
+
   -- Test basic auth
   vim.fn.jobstart({ gh_cmd, "auth", "status" }, {
     stdout_buffered = true,
@@ -293,7 +297,7 @@ function M.test_auth()
       end
     end,
   })
-  
+
   -- Test GraphQL permissions
   vim.defer_fn(function()
     local test_query = [[
@@ -304,7 +308,7 @@ function M.test_auth()
         }
       }
     ]]
-    
+
     vim.fn.jobstart({ gh_cmd, "api", "graphql", "-f", "query=" .. test_query }, {
       stdout_buffered = true,
       on_stdout = function(_, data, _)
@@ -324,6 +328,108 @@ function M.test_auth()
       end,
     })
   end, 500)
+end
+
+-- Debug: dump current state of comments and line mappings
+function M.debug_dump()
+  local diff = require("inline-reviews.diff")
+  local lines = {}
+
+  -- Header
+  table.insert(lines, "╔══════════════════════════════════════════════════════════════╗")
+  table.insert(lines, "║              INLINE REVIEWS DEBUG DUMP                       ║")
+  table.insert(lines, "╚══════════════════════════════════════════════════════════════╝")
+  table.insert(lines, "")
+
+  -- Current PR info
+  table.insert(lines, "=== PR Info ===")
+  if current_pr then
+    table.insert(lines, string.format("  PR #%d: %s", current_pr.number, current_pr.title or ""))
+    table.insert(lines, string.format("  Base branch: %s", current_pr.baseRefName or "unknown"))
+    table.insert(lines, string.format("  Head branch: %s", current_pr.headRefName or "unknown"))
+  else
+    table.insert(lines, "  No PR loaded")
+  end
+  table.insert(lines, "")
+
+  -- Base ref from comments module
+  table.insert(lines, "=== Diff Tracking ===")
+  local base_ref = comments.get_pr_base_ref()
+  table.insert(lines, string.format("  PR base ref: %s", base_ref or "nil"))
+  local diff_opts = config.get().diff_tracking
+  table.insert(lines, string.format("  Diff tracking enabled: %s", diff_opts and diff_opts.enabled and "yes" or "no"))
+  table.insert(lines, "")
+
+  -- Current buffer info
+  table.insert(lines, "=== Current Buffer ===")
+  local bufnr = vim.api.nvim_get_current_buf()
+  local file_path = vim.api.nvim_buf_get_name(bufnr)
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  table.insert(lines, string.format("  Buffer: %d", bufnr))
+  table.insert(lines, string.format("  File: %s", file_path))
+  table.insert(lines, string.format("  Line count: %d", line_count))
+  table.insert(lines, "")
+
+  -- Comments for current file
+  table.insert(lines, "=== Comments for Current File ===")
+  local all_comments = comments._get_all_comments()
+  local file_comments = {}
+  for _, c in ipairs(all_comments) do
+    if c.file == file_path then
+      table.insert(file_comments, c)
+    end
+  end
+
+  if #file_comments == 0 then
+    table.insert(lines, "  No comments for this file")
+  else
+    table.insert(lines, string.format("  Found %d comment(s):", #file_comments))
+    for _, c in ipairs(file_comments) do
+      local status = ""
+      if c.thread.is_resolved then status = status .. " [resolved]" end
+      if c.thread.is_outdated then status = status .. " [outdated]" end
+      if c.thread.is_displaced then status = status .. " [displaced]" end
+      table.insert(lines, string.format("    Line %d (orig: %d)%s - %s",
+        c.line,
+        c.original_line or c.line,
+        status,
+        (c.thread.comments[1].body or ""):sub(1, 40):gsub("\n", " ")
+      ))
+    end
+  end
+  table.insert(lines, "")
+
+  -- Diff cache state
+  local cache_lines = diff.debug_dump_cache()
+  for _, line in ipairs(cache_lines) do
+    table.insert(lines, line)
+  end
+
+  -- Open in a new buffer
+  local debug_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(debug_buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(debug_buf, "modifiable", false)
+  vim.api.nvim_buf_set_option(debug_buf, "buftype", "nofile")
+  vim.api.nvim_buf_set_option(debug_buf, "bufhidden", "wipe")
+  vim.api.nvim_buf_set_name(debug_buf, "InlineReviews Debug")
+
+  -- Open in a split
+  vim.cmd("vsplit")
+  vim.api.nvim_win_set_buf(0, debug_buf)
+
+  -- Add keymap to close
+  vim.api.nvim_buf_set_keymap(debug_buf, "n", "q", ":close<CR>", { noremap = true, silent = true })
+end
+
+-- Debug: test line mapping for current file/line
+function M.debug_test_line(line_num)
+  local diff = require("inline-reviews.diff")
+  local file_path = vim.api.nvim_buf_get_name(0)
+  local base_ref = comments.get_pr_base_ref()
+  local target_line = line_num or vim.api.nvim_win_get_cursor(0)[1]
+
+  print(string.format("Testing mapping for %s:%d (base_ref: %s)", file_path, target_line, base_ref or "nil"))
+  diff.debug_test_mapping(file_path, target_line, base_ref)
 end
 
 return M

@@ -76,3 +76,15 @@ end, { desc = "Manually refresh PR comments from GitHub" })
 vim.api.nvim_create_user_command("InlineCommentsTestAuth", function()
   require("inline-reviews").test_auth()
 end, { desc = "Test GitHub authentication and permissions" })
+
+vim.api.nvim_create_user_command("InlineCommentsDebugDump", function()
+  require("inline-reviews").debug_dump()
+end, { desc = "Dump debug info about comments and line mappings" })
+
+vim.api.nvim_create_user_command("InlineCommentsDebugLine", function(opts)
+  local line_num = tonumber(opts.args)
+  require("inline-reviews").debug_test_line(line_num)
+end, {
+  nargs = "?",
+  desc = "Test line mapping for current or specified line",
+})
