@@ -29,7 +29,17 @@ local function get_all_comments()
       comment_preview = comment_preview .. "..."
     end
     
-    local status_icon = thread.is_resolved and "✓" or "●"
+    -- Get icons from config
+    local config = require("inline-reviews.config").get()
+    -- Resolved takes precedence over outdated
+    local status_icon
+    if thread.is_resolved then
+      status_icon = config.display.resolved_sign_text
+    elseif thread.is_outdated then
+      status_icon = config.icons.outdated or "○"
+    else
+      status_icon = config.display.sign_text
+    end
     local outdated = thread.is_outdated and " [outdated]" or ""
     
     table.insert(results, {
@@ -81,8 +91,8 @@ local function comment_previewer(opts)
       
       -- Get the comment line and context
       local comment_line = entry.lnum or 1
-      local context_before = 15  -- Show more context
-      local context_after = 15   -- Show more context
+      local context_before = 5  -- Reduced context
+      local context_after = 5   -- Reduced context
       local start_line = math.max(1, comment_line - context_before)
       local end_line = math.min(#file_lines, comment_line + context_after)
       
@@ -127,15 +137,54 @@ local function comment_previewer(opts)
       local status_text = thread.is_resolved and " [RESOLVED]" or ""
       local outdated_text = thread.is_outdated and " [OUTDATED]" or ""
       
-      -- Thread status
+      -- Thread status with proper highlighting
       if status_text ~= "" or outdated_text ~= "" then
-        table.insert(preview_lines, "Status:" .. status_text .. outdated_text)
+        local status_line = "Status:"
+        table.insert(preview_lines, status_line .. status_text .. outdated_text)
+        
+        -- Highlight "Status:" label
         table.insert(highlights, { 
           line = #preview_lines - 1, 
           col = 0, 
-          end_col = -1, 
-          hl_group = thread.is_resolved and "Comment" or "WarningMsg" 
+          end_col = vim.fn.strlen("Status:"), 
+          hl_group = "Comment" 
         })
+        
+        -- Highlight status tags with priority (resolved > outdated)
+        if thread.is_resolved then
+          -- Highlight [RESOLVED] in green
+          local resolved_start = vim.fn.strlen(status_line)
+          local resolved_end = resolved_start + vim.fn.strlen(status_text)
+          table.insert(highlights, {
+            line = #preview_lines - 1,
+            col = resolved_start,
+            end_col = resolved_end,
+            hl_group = "DiagnosticOk"  -- Green
+          })
+          
+          -- If also outdated, highlight [OUTDATED] in dimmed color
+          if thread.is_outdated then
+            local outdated_start = resolved_end
+            local outdated_end = outdated_start + vim.fn.strlen(outdated_text)
+            table.insert(highlights, {
+              line = #preview_lines - 1,
+              col = outdated_start,
+              end_col = outdated_end,
+              hl_group = "Comment"  -- Dimmed since resolved takes precedence
+            })
+          end
+        elseif thread.is_outdated then
+          -- Only outdated, highlight in orange/warning color
+          local outdated_start = vim.fn.strlen(status_line)
+          local outdated_end = outdated_start + vim.fn.strlen(outdated_text)
+          table.insert(highlights, {
+            line = #preview_lines - 1,
+            col = outdated_start,
+            end_col = outdated_end,
+            hl_group = "DiagnosticWarn"  -- Orange
+          })
+        end
+        
         table.insert(preview_lines, "")
       end
       
@@ -150,10 +199,13 @@ local function comment_previewer(opts)
         local time = comment.created_at:match("(%d%d%d%d%-[^T]+)")
         local author_line = string.format("● %s • %s", comment.author, time or "")
         table.insert(preview_lines, author_line)
+        
+        -- Calculate proper byte positions for highlighting
+        local bullet_prefix = "● "
         table.insert(highlights, { 
           line = #preview_lines - 1, 
-          col = 0, 
-          end_col = string.len(comment.author) + 2,
+          col = vim.fn.strlen(bullet_prefix),  -- Start after bullet and space
+          end_col = vim.fn.strlen(bullet_prefix .. comment.author),  -- End after author name
           hl_group = "Function" 
         })
         table.insert(preview_lines, "")
@@ -318,7 +370,7 @@ local function inline_reviews_picker(opts)
   
   local make_display = function(entry)
     return displayer({
-      { entry.value.status_icon, entry.value.is_resolved and "TelescopeResultsComment" or "TelescopeResultsFunction" },
+      { entry.value.status_icon, entry.value.thread.is_resolved and "TelescopeResultsComment" or "TelescopeResultsFunction" },
       { 
         string.format("%s:%d", entry.value.relative_path, entry.value.line),
         "TelescopeResultsIdentifier"
@@ -360,12 +412,15 @@ local function inline_reviews_picker(opts)
       actions.select_default:replace(function()
         actions.close(prompt_bufnr)
         local selection = action_state.get_selected_entry()
-        
+
         if selection then
           -- Open the file
           vim.cmd("edit " .. vim.fn.fnameescape(selection.value.file))
-          -- Go to the line
-          vim.api.nvim_win_set_cursor(0, { selection.value.line, 0 })
+          -- Go to the line (clamped to buffer bounds)
+          local line_count = vim.api.nvim_buf_line_count(0)
+          local target_line = math.min(selection.value.line, line_count)
+          target_line = math.max(1, target_line)
+          vim.api.nvim_win_set_cursor(0, { target_line, 0 })
           
           -- Show the comment hover
           vim.schedule(function()
@@ -380,10 +435,14 @@ local function inline_reviews_picker(opts)
         if selection then
           -- Save current window
           local telescope_win = vim.api.nvim_get_current_win()
-          
+
           -- Open file in a split
           vim.cmd("vsplit " .. vim.fn.fnameescape(selection.value.file))
-          vim.api.nvim_win_set_cursor(0, { selection.value.line, 0 })
+          -- Go to the line (clamped to buffer bounds)
+          local line_count = vim.api.nvim_buf_line_count(0)
+          local target_line = math.min(selection.value.line, line_count)
+          target_line = math.max(1, target_line)
+          vim.api.nvim_win_set_cursor(0, { target_line, 0 })
           
           -- Show hover
           vim.schedule(function()

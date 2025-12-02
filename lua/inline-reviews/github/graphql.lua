@@ -29,6 +29,7 @@ function M.parse_review_comments(response)
         position = comment.position,
         original_position = comment.originalPosition,
         reactions = comment.reactionGroups,
+        url = comment.url,
       })
     end
     
@@ -134,6 +135,7 @@ function M.review_comments_query(pr_number)
               comments(first: 50) {
                 nodes {
                   id
+                  url
                   body
                   author {
                     login
@@ -146,6 +148,7 @@ function M.review_comments_query(pr_number)
                   originalPosition
                   reactionGroups {
                     content
+                    viewerHasReacted
                     users {
                       totalCount
                     }

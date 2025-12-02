@@ -63,13 +63,13 @@ local function get_comment_display(data, opts)
   
   local text, hl
   
-  -- Determine icon based on state
-  if data.has_outdated and opts.show_outdated then
-    text = opts.icons.outdated or "○"
-    hl = "InlineReviewOutdatedSign"
-  elseif data.all_resolved then
+  -- Determine icon based on state (resolved takes precedence)
+  if data.all_resolved then
     text = opts.icons.resolved or "✓"
     hl = "InlineReviewResolvedSign"
+  elseif data.has_outdated and opts.show_outdated then
+    text = opts.icons.outdated or "○"
+    hl = "InlineReviewOutdatedSign"
   else
     text = opts.icons.comment or "●"
     hl = "InlineReviewCommentSign"
@@ -160,26 +160,32 @@ function M.setup()
     -- Add our custom signs for statuscolumn
     local file_path = vim.api.nvim_buf_get_name(bufnr or 0)
     if file_path == "" then return end
-    
+
+    -- Get buffer line count for validation
+    local line_count = vim.api.nvim_buf_line_count(bufnr or 0)
+
     local comment_lines = comments.get_all_comment_lines_for_file(file_path)
     for _, line in ipairs(comment_lines) do
-      local data = get_line_comment_data(bufnr or 0, line)
-      if data then
-        local display = get_comment_display(data, opts)
-        if display then
-          -- Place a sign with our custom text
-          vim.fn.sign_place(
-            line * 1000 + 999, -- Unique ID
-            "InlineReviewsStatusColumn",
-            "InlineReviewsStatusColumn",
-            bufnr or 0,
-            {
-              lnum = line,
-              priority = 90,
-              text = display.text,
-              texthl = display.texthl
-            }
-          )
+      -- Skip lines that are outside the buffer bounds
+      if line >= 1 and line <= line_count then
+        local data = get_line_comment_data(bufnr or 0, line)
+        if data then
+          local display = get_comment_display(data, opts)
+          if display then
+            -- Place a sign with our custom text
+            vim.fn.sign_place(
+              line * 1000 + 999, -- Unique ID
+              "InlineReviewsStatusColumn",
+              "InlineReviewsStatusColumn",
+              bufnr or 0,
+              {
+                lnum = line,
+                priority = 90,
+                text = display.text,
+                texthl = display.texthl
+              }
+            )
+          end
         end
       end
     end

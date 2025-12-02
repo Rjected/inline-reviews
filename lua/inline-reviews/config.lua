@@ -31,6 +31,7 @@ local defaults = {
     reply_key = "r",              -- Key to reply to comment in hover
     react_key = "e",              -- Key to add reaction in hover
     resolve_key = "s",            -- Key to toggle resolve status in hover
+    open_in_browser_key = "o",    -- Key to open comment in browser
     show_action_hints = true,     -- Show action hints in hover window
   },
   github = {
