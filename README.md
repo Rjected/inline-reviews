@@ -32,7 +32,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "dan/inline-reviews.nvim",
+  "Rjected/inline-reviews",
   config = function()
     require("inline-reviews").setup()
   end,
